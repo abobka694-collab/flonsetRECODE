@@ -697,3 +697,444 @@ ToggleMenu()
 
 print("✅ FlonsetHUB loaded!")
 print("🔑 Press [G] to toggle menu")
+
+-- ══════════════════════════════════════════════════════════════
+-- CHINA HAT МОДУЛЬ
+-- ═══════════════════════════════════════════════════════════════
+
+local ChinaHat = {}
+local HatSettings = {
+    Enabled = false,
+    Color = Color3.fromRGB(180, 100, 255), -- Фиолетовый
+    Transparency = 0.5,
+    Size = 3,
+}
+
+local HatData = {}
+local HatThread = nil
+
+local function CreateHat(player)
+    if player == LocalPlayer then return end
+    if HatData[player] then return end
+    
+    local char = player.Character
+    if not char then return end
+    
+    local head = char:FindFirstChild("Head")
+    if not head then return end
+    
+    -- Создаем шляпу (конус)
+    local hat = Instance.new("Part")
+    hat.Name = "FlonsetHat"
+    hat.Size = Vector3.new(HatSettings.Size, 0.3, HatSettings.Size)
+    hat.Shape = Enum.PartType.Cylinder
+    hat.Material = Enum.Material.Neon
+    hat.Color = HatSettings.Color
+    hat.Transparency = HatSettings.Transparency
+    hat.CanCollide = false
+    hat.CanQuery = false
+    hat.Anchored = true
+    hat.Parent = workspace
+    
+    -- Позиционируем над головой
+    hat.CFrame = head.CFrame * CFrame.new(0, 2.5, 0) * CFrame.Angles(0, 0, math.rad(90))
+    
+    HatData[player] = {
+        hat = hat,
+        head = head,
+    }
+end
+
+local function RemoveHat(player)
+    local data = HatData[player]
+    if not data then return end
+    
+    if data.hat then
+        pcall(function() data.hat:Destroy() end)
+    end
+    
+    HatData[player] = nil
+end
+
+local function UpdateHats()
+    if not HatSettings.Enabled then return end
+    
+    for player, data in pairs(HatData) do
+        local char = player.Character
+        local head = char and char:FindFirstChild("Head")
+        
+        if not head or not char then
+            RemoveHat(player)
+            continue
+        end
+        
+        -- Обновляем позицию шляпы
+        if data.hat and data.hat.Parent then
+            data.hat.CFrame = head.CFrame * CFrame.new(0, 2.5, 0) * CFrame.Angles(0, 0, math.rad(90))
+            data.hat.Color = HatSettings.Color
+            data.hat.Transparency = HatSettings.Transparency
+        end
+    end
+end
+
+function ChinaHat:Enable()
+    HatSettings.Enabled = true
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            CreateHat(player)
+        end
+    end
+    
+    ChinaHat.PlayerAddedConn = Players.PlayerAdded:Connect(function(player)
+        player.CharacterAdded:Connect(function()
+            task.wait(0.5)
+            if HatSettings.Enabled then
+                CreateHat(player)
+            end
+        end)
+    end)
+    
+    ChinaHat.PlayerRemovingConn = Players.PlayerRemoving:Connect(function(player)
+        RemoveHat(player)
+    end)
+    
+    HatThread = RunService.Heartbeat:Connect(function()
+        pcall(UpdateHats)
+    end)
+    
+    print("✅ China Hat enabled!")
+end
+
+function ChinaHat:Disable()
+    HatSettings.Enabled = false
+    
+    if ChinaHat.PlayerAddedConn then
+        ChinaHat.PlayerAddedConn:Disconnect()
+        ChinaHat.PlayerAddedConn = nil
+    end
+    
+    if ChinaHat.PlayerRemovingConn then
+        ChinaHat.PlayerRemovingConn:Disconnect()
+        ChinaHat.PlayerRemovingConn = nil
+    end
+    
+    if HatThread then
+        HatThread:Disconnect()
+        HatThread = nil
+    end
+    
+    for player in pairs(HatData) do
+        RemoveHat(player)
+    end
+    
+    print("❌ China Hat disabled!")
+end
+
+function ChinaHat:SetColor(color)
+    HatSettings.Color = color
+end
+
+function ChinaHat:SetTransparency(value)
+    HatSettings.Transparency = math.clamp(value, 0, 1)
+end
+
+function ChinaHat:SetSize(value)
+    HatSettings.Size = math.clamp(value, 1, 10)
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- ДОБАВЛЕНИЕ В VISUALS ВКЛАДКУ
+-- ═══════════════════════════════════════════════════════════════
+
+local ChinaHatToggleFrame = Instance.new("Frame")
+ChinaHatToggleFrame.Size = UDim2.new(1, 0, 0, 32)
+ChinaHatToggleFrame.BackgroundColor3 = COLORS.Section
+ChinaHatToggleFrame.BorderSizePixel = 0
+ChinaHatToggleFrame.Parent = VisualsContent
+
+local ChinaHatToggleCorner = Instance.new("UICorner")
+ChinaHatToggleCorner.CornerRadius = UDim.new(0, 6)
+ChinaHatToggleCorner.Parent = ChinaHatToggleFrame
+
+local ChinaHatLabel = Instance.new("TextLabel")
+ChinaHatLabel.Size = UDim2.new(1, -90, 1, 0)
+ChinaHatLabel.Position = UDim2.new(0, 12, 0, 0)
+ChinaHatLabel.BackgroundTransparency = 1
+ChinaHatLabel.Text = "China Hat"
+ChinaHatLabel.TextColor3 = COLORS.Text
+ChinaHatLabel.TextSize = 12
+ChinaHatLabel.Font = Enum.Font.Gotham
+ChinaHatLabel.TextXAlignment = Enum.TextXAlignment.Left
+ChinaHatLabel.Parent = ChinaHatToggleFrame
+
+local ChinaHatToggleButton = Instance.new("TextButton")
+ChinaHatToggleButton.Size = UDim2.new(0, 36, 0, 20)
+ChinaHatToggleButton.Position = UDim2.new(1, -80, 0.5, -10)
+ChinaHatToggleButton.BackgroundColor3 = COLORS.ToggleOff
+ChinaHatToggleButton.Text = ""
+ChinaHatToggleButton.BorderSizePixel = 0
+ChinaHatToggleButton.Parent = ChinaHatToggleFrame
+
+local ChinaHatToggleButtonCorner = Instance.new("UICorner")
+ChinaHatToggleButtonCorner.CornerRadius = UDim.new(1, 0)
+ChinaHatToggleButtonCorner.Parent = ChinaHatToggleButton
+
+local ChinaHatCircle = Instance.new("Frame")
+ChinaHatCircle.Size = UDim2.new(0, 16, 0, 16)
+ChinaHatCircle.Position = UDim2.new(0, 2, 0.5, -8)
+ChinaHatCircle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+ChinaHatCircle.BorderSizePixel = 0
+ChinaHatCircle.Parent = ChinaHatToggleButton
+
+local ChinaHatCircleCorner = Instance.new("UICorner")
+ChinaHatCircleCorner.CornerRadius = UDim.new(1, 0)
+ChinaHatCircleCorner.Parent = ChinaHatCircle
+
+-- Шестеренка
+local ChinaHatGearButton = Instance.new("TextButton")
+ChinaHatGearButton.Size = UDim2.new(0, 30, 0, 30)
+ChinaHatGearButton.Position = UDim2.new(1, -40, 0.5, -15)
+ChinaHatGearButton.BackgroundColor3 = COLORS.Section
+ChinaHatGearButton.Text = ""
+ChinaHatGearButton.TextColor3 = COLORS.TextDim
+ChinaHatGearButton.TextSize = 16
+ChinaHatGearButton.Font = Enum.Font.GothamBold
+ChinaHatGearButton.BorderSizePixel = 0
+ChinaHatGearButton.Parent = ChinaHatToggleFrame
+
+local ChinaHatGearCorner = Instance.new("UICorner")
+ChinaHatGearCorner.CornerRadius = UDim.new(0, 6)
+ChinaHatGearCorner.Parent = ChinaHatGearButton
+
+local ChinaHatEnabled = false
+local ChinaHatSettingsOpen = false
+local ChinaHatSettingsPanel = nil
+
+ChinaHatToggleButton.MouseButton1Click:Connect(function()
+    ChinaHatEnabled = not ChinaHatEnabled
+    ChinaHatToggleButton.BackgroundColor3 = ChinaHatEnabled and COLORS.ToggleOn or COLORS.ToggleOff
+    TweenService:Create(ChinaHatCircle, TweenInfo.new(0.2), {
+        Position = ChinaHatEnabled and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+    }):Play()
+    
+    if ChinaHatEnabled then
+        ChinaHat:Enable()
+    else
+        ChinaHat:Disable()
+        if ChinaHatSettingsPanel then
+            ChinaHatSettingsPanel:Destroy()
+            ChinaHatSettingsPanel = nil
+            ChinaHatSettingsOpen = false
+        end
+    end
+end)
+
+ChinaHatGearButton.MouseButton1Click:Connect(function()
+    if not ChinaHatEnabled then return end
+    
+    ChinaHatSettingsOpen = not ChinaHatSettingsOpen
+    
+    if ChinaHatSettingsOpen then
+        if not ChinaHatSettingsPanel then
+            ChinaHatSettingsPanel = Instance.new("Frame")
+            ChinaHatSettingsPanel.Size = UDim2.new(1, 0, 0, 0)
+            ChinaHatSettingsPanel.BackgroundColor3 = COLORS.Section
+            ChinaHatSettingsPanel.BorderSizePixel = 0
+            ChinaHatSettingsPanel.AutomaticSize = Enum.AutomaticSize.Y
+            ChinaHatSettingsPanel.Parent = VisualsContent
+            
+            local PanelCorner = Instance.new("UICorner")
+            PanelCorner.CornerRadius = UDim.new(0, 6)
+            PanelCorner.Parent = ChinaHatSettingsPanel
+            
+            local PanelLayout = Instance.new("UIListLayout")
+            PanelLayout.Padding = UDim.new(0, 4)
+            PanelLayout.SortOrder = Enum.SortOrder.LayoutOrder
+            PanelLayout.Parent = ChinaHatSettingsPanel
+            
+            local PanelPadding = Instance.new("UIPadding")
+            PanelPadding.PaddingTop = UDim.new(0, 8)
+            PanelPadding.PaddingBottom = UDim.new(0, 8)
+            PanelPadding.PaddingLeft = UDim.new(0, 12)
+            PanelPadding.PaddingRight = UDim.new(0, 12)
+            PanelPadding.Parent = ChinaHatSettingsPanel
+            
+            local PanelTitle = Instance.new("TextLabel")
+            PanelTitle.Size = UDim2.new(1, 0, 0, 20)
+            PanelTitle.BackgroundTransparency = 1
+            PanelTitle.Text = "China Hat Settings"
+            PanelTitle.TextColor3 = COLORS.Accent
+            PanelTitle.TextSize = 13
+            PanelTitle.Font = Enum.Font.GothamBold
+            PanelTitle.TextXAlignment = Enum.TextXAlignment.Left
+            PanelTitle.Parent = ChinaHatSettingsPanel
+            
+            -- Слайдер прозрачности
+            local TransparencyFrame = Instance.new("Frame")
+            TransparencyFrame.Size = UDim2.new(1, 0, 0, 40)
+            TransparencyFrame.BackgroundColor3 = COLORS.Background
+            TransparencyFrame.BorderSizePixel = 0
+            TransparencyFrame.Parent = ChinaHatSettingsPanel
+            
+            local TransparencyCorner = Instance.new("UICorner")
+            TransparencyCorner.CornerRadius = UDim.new(0, 4)
+            TransparencyCorner.Parent = TransparencyFrame
+            
+            local TransparencyLabel = Instance.new("TextLabel")
+            TransparencyLabel.Size = UDim2.new(1, -60, 0, 20)
+            TransparencyLabel.Position = UDim2.new(0, 8, 0, 5)
+            TransparencyLabel.BackgroundTransparency = 1
+            TransparencyLabel.Text = "Transparency: " .. tostring(HatSettings.Transparency)
+            TransparencyLabel.TextColor3 = COLORS.Text
+            TransparencyLabel.TextSize = 11
+            TransparencyLabel.Font = Enum.Font.Gotham
+            TransparencyLabel.TextXAlignment = Enum.TextXAlignment.Left
+            TransparencyLabel.Parent = TransparencyFrame
+            
+            local TransparencySlider = Instance.new("Frame")
+            TransparencySlider.Size = UDim2.new(1, -20, 0, 6)
+            TransparencySlider.Position = UDim2.new(0, 10, 0, 28)
+            TransparencySlider.BackgroundColor3 = COLORS.ToggleOff
+            TransparencySlider.BorderSizePixel = 0
+            TransparencySlider.Parent = TransparencyFrame
+            
+            local TransparencySliderCorner = Instance.new("UICorner")
+            TransparencySliderCorner.CornerRadius = UDim.new(1, 0)
+            TransparencySliderCorner.Parent = TransparencySlider
+            
+            local TransparencyFill = Instance.new("Frame")
+            TransparencyFill.Size = UDim2.new(HatSettings.Transparency, 0, 1, 0)
+            TransparencyFill.BackgroundColor3 = COLORS.Accent
+            TransparencyFill.BorderSizePixel = 0
+            TransparencyFill.Parent = TransparencySlider
+            
+            local TransparencyFillCorner = Instance.new("UICorner")
+            TransparencyFillCorner.CornerRadius = UDim.new(1, 0)
+            TransparencyFillCorner.Parent = TransparencyFill
+            
+            local TransparencyKnob = Instance.new("Frame")
+            TransparencyKnob.Size = UDim2.new(0, 12, 0, 12)
+            TransparencyKnob.Position = UDim2.new(HatSettings.Transparency, -6, 0.5, -6)
+            TransparencyKnob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            TransparencyKnob.BorderSizePixel = 0
+            TransparencyKnob.Parent = TransparencySlider
+            
+            local TransparencyKnobCorner = Instance.new("UICorner")
+            TransparencyKnobCorner.CornerRadius = UDim.new(1, 0)
+            TransparencyKnobCorner.Parent = TransparencyKnob
+            
+            local dragging = false
+            TransparencySlider.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                    dragging = true
+                end
+            end)
+            
+            TransparencySlider.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                    dragging = false
+                end
+            end)
+            
+            UserInputService.InputChanged:Connect(function(input)
+                if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                    local pos = input.Position.X - TransparencySlider.AbsolutePosition.X
+                    local percent = math.clamp(pos / TransparencySlider.AbsoluteSize.X, 0, 1)
+                    HatSettings.Transparency = percent
+                    TransparencyFill.Size = UDim2.new(percent, 0, 1, 0)
+                    TransparencyKnob.Position = UDim2.new(percent, -6, 0.5, -6)
+                    TransparencyLabel.Text = "Transparency: " .. string.format("%.2f", percent)
+                    ChinaHat:SetTransparency(percent)
+                end
+            end)
+            
+            -- Слайдер размера
+            local SizeFrame = Instance.new("Frame")
+            SizeFrame.Size = UDim2.new(1, 0, 0, 40)
+            SizeFrame.BackgroundColor3 = COLORS.Background
+            SizeFrame.BorderSizePixel = 0
+            SizeFrame.Parent = ChinaHatSettingsPanel
+            
+            local SizeCorner = Instance.new("UICorner")
+            SizeCorner.CornerRadius = UDim.new(0, 4)
+            SizeCorner.Parent = SizeFrame
+            
+            local SizeLabel = Instance.new("TextLabel")
+            SizeLabel.Size = UDim2.new(1, -60, 0, 20)
+            SizeLabel.Position = UDim2.new(0, 8, 0, 5)
+            SizeLabel.BackgroundTransparency = 1
+            SizeLabel.Text = "Size: " .. tostring(HatSettings.Size)
+            SizeLabel.TextColor3 = COLORS.Text
+            SizeLabel.TextSize = 11
+            SizeLabel.Font = Enum.Font.Gotham
+            SizeLabel.TextXAlignment = Enum.TextXAlignment.Left
+            SizeLabel.Parent = SizeFrame
+            
+            local SizeSlider = Instance.new("Frame")
+            SizeSlider.Size = UDim2.new(1, -20, 0, 6)
+            SizeSlider.Position = UDim2.new(0, 10, 0, 28)
+            SizeSlider.BackgroundColor3 = COLORS.ToggleOff
+            SizeSlider.BorderSizePixel = 0
+            SizeSlider.Parent = SizeFrame
+            
+            local SizeSliderCorner = Instance.new("UICorner")
+            SizeSliderCorner.CornerRadius = UDim.new(1, 0)
+            SizeSliderCorner.Parent = SizeSlider
+            
+            local SizeFill = Instance.new("Frame")
+            SizeFill.Size = UDim2.new((HatSettings.Size - 1) / 9, 0, 1, 0)
+            SizeFill.BackgroundColor3 = COLORS.Accent
+            SizeFill.BorderSizePixel = 0
+            SizeFill.Parent = SizeSlider
+            
+            local SizeFillCorner = Instance.new("UICorner")
+            SizeFillCorner.CornerRadius = UDim.new(1, 0)
+            SizeFillCorner.Parent = SizeFill
+            
+            local SizeKnob = Instance.new("Frame")
+            SizeKnob.Size = UDim2.new(0, 12, 0, 12)
+            SizeKnob.Position = UDim2.new((HatSettings.Size - 1) / 9, -6, 0.5, -6)
+            SizeKnob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            SizeKnob.BorderSizePixel = 0
+            SizeKnob.Parent = SizeSlider
+            
+            local SizeKnobCorner = Instance.new("UICorner")
+            SizeKnobCorner.CornerRadius = UDim.new(1, 0)
+            SizeKnobCorner.Parent = SizeKnob
+            
+            local sizeDragging = false
+            SizeSlider.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                    sizeDragging = true
+                end
+            end)
+            
+            SizeSlider.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                    sizeDragging = false
+                end
+            end)
+            
+            UserInputService.InputChanged:Connect(function(input)
+                if sizeDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                    local pos = input.Position.X - SizeSlider.AbsolutePosition.X
+                    local percent = math.clamp(pos / SizeSlider.AbsoluteSize.X, 0, 1)
+                    local size = 1 + percent * 9
+                    HatSettings.Size = size
+                    SizeFill.Size = UDim2.new(percent, 0, 1, 0)
+                    SizeKnob.Position = UDim2.new(percent, -6, 0.5, -6)
+                    SizeLabel.Text = "Size: " .. string.format("%.1f", size)
+                    ChinaHat:SetSize(size)
+                end
+            end)
+        end
+    else
+        if ChinaHatSettingsPanel then
+            ChinaHatSettingsPanel:Destroy()
+            ChinaHatSettingsPanel = nil
+        end
+    end
+end)
+
+print("✅ China Hat loaded!")
