@@ -2913,3 +2913,624 @@ CreateButton(MiscContent, "Grab Nearest Gun (Manual)", function()
 end)
 
 print("✅ Grab Gun loaded!")
+
+-- ═══════════════════════════════════════════════════════════════
+-- PLAYER ВКЛАДКА - ПОЛНЫЙ КОД
+-- ═══════════════════════════════════════════════════════════════
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local LocalPlayer = Players.LocalPlayer
+
+-- ═══════════════════════════════════════════════════════════════
+-- НАХОДИМ GUI
+-- ═══════════════════════════════════════════════════════════════
+local ScreenGui = LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("FlonsetHUB")
+if not ScreenGui then
+    print(" FlonsetHUB GUI not found!")
+    return
+end
+
+local MainFrame = ScreenGui:FindFirstChild("Main")
+if not MainFrame then return end
+
+local Content = MainFrame:FindFirstChild("Content")
+if not Content then return end
+
+local PlayerContent = Content:FindFirstChild("PLAYER_Content")
+if not PlayerContent then
+    print(" PLAYER_Content not found!")
+    return
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- ЦВЕТА
+-- ═══════════════════════════════════════════════════════════════
+local COLORS = {
+    Section = Color3.fromRGB(22, 22, 35),
+    Background = Color3.fromRGB(18, 18, 28),
+    Accent = Color3.fromRGB(80, 120, 255),
+    AccentDark = Color3.fromRGB(60, 90, 200),
+    Text = Color3.fromRGB(220, 220, 230),
+    TextDim = Color3.fromRGB(140, 140, 160),
+    ToggleOff = Color3.fromRGB(60, 60, 80),
+    ToggleOn = Color3.fromRGB(80, 120, 255),
+    Hover = Color3.fromRGB(30, 30, 50),
+    Button = Color3.fromRGB(45, 45, 60),
+    ButtonHover = Color3.fromRGB(60, 60, 80),
+}
+
+-- ═══════════════════════════════════════════════════════════════
+-- 1. INVIS (как в Infinity Yield - через LocalTransparencyModifier)
+-- ═══════════════════════════════════════════════════════════════
+local Invis = {}
+local InvisEnabled = false
+local InvisThread = nil
+local OriginalTransparency = {}
+
+local function ApplyInvis()
+    local char = LocalPlayer.Character
+    if not char then return end
+    
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") or part:IsA("Decal") or part:IsA("Texture") then
+            -- LocalTransparencyModifier - клиентское свойство, сервер не видит!
+            part.LocalTransparencyModifier = 1
+            part.Transparency = 1
+        elseif part:IsA("ParticleEmitter") or part:IsA("Fire") 
+            or part:IsA("Smoke") or part:IsA("Sparkles")
+            or part:IsA("Beam") or part:IsA("Trail") then
+            part.Enabled = false
+        elseif part:IsA("ForceField") then
+            part.Visible = false
+        end
+    end
+end
+
+local function RestoreInvis()
+    local char = LocalPlayer.Character
+    if not char then return end
+    
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") or part:IsA("Decal") or part:IsA("Texture") then
+            part.LocalTransparencyModifier = 0
+            part.Transparency = 0
+        elseif part:IsA("ParticleEmitter") or part:IsA("Fire") 
+            or part:IsA("Smoke") or part:IsA("Sparkles")
+            or part:IsA("Beam") or part:IsA("Trail") then
+            part.Enabled = true
+        elseif part:IsA("ForceField") then
+            part.Visible = true
+        end
+    end
+end
+
+function Invis:Enable()
+    InvisEnabled = true
+    ApplyInvis()
+    
+    InvisThread = RunService.Heartbeat:Connect(function()
+        if not InvisEnabled then return end
+        ApplyInvis()
+    end)
+    
+    print("✅ Invis enabled! (LocalTransparencyModifier)")
+end
+
+function Invis:Disable()
+    InvisEnabled = false
+    if InvisThread then
+        InvisThread:Disconnect()
+        InvisThread = nil
+    end
+    RestoreInvis()
+    print(" Invis disabled!")
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- 2. FAKE HEADLESS (как в IY - только голова прозрачная)
+-- ═══════════════════════════════════════════════════════════════
+local FakeHeadless = {}
+local FakeHeadlessEnabled = false
+local FakeHeadlessThread = nil
+
+function FakeHeadless:Enable()
+    FakeHeadlessEnabled = true
+    
+    FakeHeadlessThread = RunService.Heartbeat:Connect(function()
+        if not FakeHeadlessEnabled then return end
+        local char = LocalPlayer.Character
+        if not char then return end
+        
+        local head = char:FindFirstChild("Head")
+        if head then
+            head.LocalTransparencyModifier = 1
+            head.Transparency = 1
+            
+            -- Скрываем всё что на голове
+            for _, child in ipairs(head:GetChildren()) do
+                if child:IsA("Decal") or child:IsA("Texture") then
+                    child.LocalTransparencyModifier = 1
+                    child.Transparency = 1
+                end
+            end
+        end
+    end)
+    
+    print("✅ Fake Headless enabled!")
+end
+
+function FakeHeadless:Disable()
+    FakeHeadlessEnabled = false
+    if FakeHeadlessThread then
+        FakeHeadlessThread:Disconnect()
+        FakeHeadlessThread = nil
+    end
+    
+    local char = LocalPlayer.Character
+    if char then
+        local head = char:FindFirstChild("Head")
+        if head then
+            head.LocalTransparencyModifier = 0
+            head.Transparency = 0
+            for _, child in ipairs(head:GetChildren()) do
+                if child:IsA("Decal") or child:IsA("Texture") then
+                    child.LocalTransparencyModifier = 0
+                    child.Transparency = 0
+                end
+            end
+        end
+    end
+    
+    print("❌ Fake Headless disabled!")
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- 3. FAKE KORBLEX (нога как у Korblox)
+-- ═══════════════════════════════════════════════════════════════
+local FakeKorblox = {}
+local FakeKorbloxEnabled = false
+local FakeKorbloxThread = nil
+local OriginalRightLeg = nil
+
+function FakeKorblox:Enable()
+    FakeKorbloxEnabled = true
+    
+    FakeKorbloxThread = RunService.Heartbeat:Connect(function()
+        if not FakeKorbloxEnabled then return end
+        local char = LocalPlayer.Character
+        if not char then return end
+        
+        local rightLeg = char:FindFirstChild("Right Leg") or char:FindFirstChild("RightLowerLeg")
+        if rightLeg then
+            -- Делаем ногу прозрачной (как будто её нет)
+            rightLeg.LocalTransparencyModifier = 1
+            rightLeg.Transparency = 1
+            
+            -- Скрываем всё что на ноге
+            for _, child in ipairs(rightLeg:GetChildren()) do
+                if child:IsA("Decal") or child:IsA("Texture") then
+                    child.LocalTransparencyModifier = 1
+                    child.Transparency = 1
+                end
+            end
+        end
+    end)
+    
+    print("✅ Fake Korblox enabled!")
+end
+
+function FakeKorblox:Disable()
+    FakeKorbloxEnabled = false
+    if FakeKorbloxThread then
+        FakeKorbloxThread:Disconnect()
+        FakeKorbloxThread = nil
+    end
+    
+    local char = LocalPlayer.Character
+    if char then
+        local rightLeg = char:FindFirstChild("Right Leg") or char:FindFirstChild("RightLowerLeg")
+        if rightLeg then
+            rightLeg.LocalTransparencyModifier = 0
+            rightLeg.Transparency = 0
+            for _, child in ipairs(rightLeg:GetChildren()) do
+                if child:IsA("Decal") or child:IsA("Texture") then
+                    child.LocalTransparencyModifier = 0
+                    child.Transparency = 0
+                end
+            end
+        end
+    end
+    
+    print("❌ Fake Korblox disabled!")
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- 4. WALKSPEED
+-- ═══════════════════════════════════════════════════════════════
+local WalkSpeed = {}
+local WalkSpeedValue = 16
+
+function WalkSpeed:Set(value)
+    WalkSpeedValue = value
+    local char = LocalPlayer.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.WalkSpeed = value
+        end
+    end
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- 5. JUMP POWER
+-- ═══════════════════════════════════════════════════════════════
+local JumpPower = {}
+local JumpPowerValue = 50
+
+function JumpPower:Set(value)
+    JumpPowerValue = value
+    local char = LocalPlayer.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.UseJumpPower = true
+            hum.JumpPower = value
+        end
+    end
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- 6. BHOP (автоматический прыжок при зажатии пробела)
+-- ═══════════════════════════════════════════════════════════════
+local Bhop = {}
+local BhopEnabled = false
+local BhopThread = nil
+
+function Bhop:Enable()
+    BhopEnabled = true
+    BhopThread = RunService.Heartbeat:Connect(function()
+        if not BhopEnabled then return end
+        local char = LocalPlayer.Character
+        if not char then return end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum then return end
+        
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+            if hum.FloorMaterial ~= Enum.Material.Air then
+                hum:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+        end
+    end)
+    print("✅ Bhop enabled!")
+end
+
+function Bhop:Disable()
+    BhopEnabled = false
+    if BhopThread then
+        BhopThread:Disconnect()
+        BhopThread = nil
+    end
+    print("❌ Bhop disabled!")
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- 7. NOCLIP
+-- ═══════════════════════════════════════════════════════════════
+local Noclip = {}
+local NoclipEnabled = false
+local NoclipThread = nil
+
+function Noclip:Enable()
+    NoclipEnabled = true
+    NoclipThread = RunService.Stepped:Connect(function()
+        if not NoclipEnabled then return end
+        local char = LocalPlayer.Character
+        if not char then return end
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+    end)
+    print("✅ Noclip enabled!")
+end
+
+function Noclip:Disable()
+    NoclipEnabled = false
+    if NoclipThread then
+        NoclipThread:Disconnect()
+        NoclipThread = nil
+    end
+    local char = LocalPlayer.Character
+    if char then
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = true
+            end
+        end
+    end
+    print("❌ Noclip disabled!")
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- 8. FLY
+-- ═══════════════════════════════════════════════════════════════
+local Fly = {}
+local FlyEnabled = false
+local FlyThread = nil
+local FlySpeed = 50
+local flyBodyVelocity = nil
+local flyBodyGyro = nil
+
+function Fly:Enable()
+    FlyEnabled = true
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    flyBodyGyro = Instance.new("BodyGyro")
+    flyBodyGyro.MaxTorque = Vector3.new(400000, 400000, 400000)
+    flyBodyGyro.P = 9000
+    flyBodyGyro.Parent = hrp
+    
+    flyBodyVelocity = Instance.new("BodyVelocity")
+    flyBodyVelocity.MaxForce = Vector3.new(400000, 400000, 400000)
+    flyBodyVelocity.Velocity = Vector3.new(0, 0, 0)
+    flyBodyVelocity.Parent = hrp
+    
+    FlyThread = RunService.Heartbeat:Connect(function()
+        if not FlyEnabled then return end
+        local c = LocalPlayer.Character
+        if not c then return end
+        local h = c:FindFirstChild("HumanoidRootPart")
+        if not h then return end
+        
+        local camera = workspace.CurrentCamera
+        flyBodyGyro.CFrame = camera.CFrame
+        
+        local moveDir = Vector3.new(0, 0, 0)
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + camera.CFrame.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - camera.CFrame.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - camera.CFrame.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + camera.CFrame.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0, 1, 0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then moveDir = moveDir - Vector3.new(0, 1, 0) end
+        
+        if moveDir.Magnitude > 0 then
+            moveDir = moveDir.Unit
+        end
+        
+        flyBodyVelocity.Velocity = moveDir * FlySpeed
+    end)
+    
+    print("✅ Fly enabled! (WASD + Space/Ctrl)")
+end
+
+function Fly:Disable()
+    FlyEnabled = false
+    if FlyThread then
+        FlyThread:Disconnect()
+        FlyThread = nil
+    end
+    if flyBodyVelocity then flyBodyVelocity:Destroy() flyBodyVelocity = nil end
+    if flyBodyGyro then flyBodyGyro:Destroy() flyBodyGyro = nil end
+    print(" Fly disabled!")
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- 9. INFINITE JUMP
+-- ═══════════════════════════════════════════════════════════════
+local InfiniteJump = {}
+local InfiniteJumpEnabled = false
+local InfiniteJumpConn = nil
+
+function InfiniteJump:Enable()
+    InfiniteJumpEnabled = true
+    InfiniteJumpConn = UserInputService.JumpRequest:Connect(function()
+        if not InfiniteJumpEnabled then return end
+        local char = LocalPlayer.Character
+        if not char then return end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum:ChangeState(Enum.HumanoidStateType.Jumping)
+        end
+    end)
+    print("✅ Infinite Jump enabled!")
+end
+
+function InfiniteJump:Disable()
+    InfiniteJumpEnabled = false
+    if InfiniteJumpConn then
+        InfiniteJumpConn:Disconnect()
+        InfiniteJumpConn = nil
+    end
+    print("❌ Infinite Jump disabled!")
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- GUI ЭЛЕМЕНТЫ
+-- ═══════════════════════════════════════════════════════════════
+
+-- Заголовок CHARACTER
+local CharLabel = Instance.new("TextLabel")
+CharLabel.Size = UDim2.new(1, 0, 0, 20)
+CharLabel.BackgroundTransparency = 1
+CharLabel.Text = "CHARACTER"
+CharLabel.TextColor3 = COLORS.TextDim
+CharLabel.TextSize = 11
+CharLabel.Font = Enum.Font.GothamBold
+CharLabel.TextXAlignment = Enum.TextXAlignment.Left
+CharLabel.Parent = PlayerContent
+
+-- Функция создания toggle
+local function CreatePlayerToggle(name, enableFunc, disableFunc)
+    local ToggleFrame = Instance.new("Frame")
+    ToggleFrame.Size = UDim2.new(1, 0, 0, 32)
+    ToggleFrame.BackgroundColor3 = COLORS.Section
+    ToggleFrame.BorderSizePixel = 0
+    ToggleFrame.Parent = PlayerContent
+    
+    local ToggleCorner = Instance.new("UICorner")
+    ToggleCorner.CornerRadius = UDim.new(0, 6)
+    ToggleCorner.Parent = ToggleFrame
+    
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(1, -50, 1, 0)
+    Label.Position = UDim2.new(0, 12, 0, 0)
+    Label.BackgroundTransparency = 1
+    Label.Text = name
+    Label.TextColor3 = COLORS.Text
+    Label.TextSize = 12
+    Label.Font = Enum.Font.Gotham
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.Parent = ToggleFrame
+    
+    local ToggleButton = Instance.new("TextButton")
+    ToggleButton.Size = UDim2.new(0, 36, 0, 20)
+    ToggleButton.Position = UDim2.new(1, -44, 0.5, -10)
+    ToggleButton.BackgroundColor3 = COLORS.ToggleOff
+    ToggleButton.Text = ""
+    ToggleButton.BorderSizePixel = 0
+    ToggleButton.Parent = ToggleFrame
+    
+    local ToggleButtonCorner = Instance.new("UICorner")
+    ToggleButtonCorner.CornerRadius = UDim.new(1, 0)
+    ToggleButtonCorner.Parent = ToggleButton
+    
+    local Circle = Instance.new("Frame")
+    Circle.Size = UDim2.new(0, 16, 0, 16)
+    Circle.Position = UDim2.new(0, 2, 0.5, -8)
+    Circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Circle.BorderSizePixel = 0
+    Circle.Parent = ToggleButton
+    
+    local CircleCorner = Instance.new("UICorner")
+    CircleCorner.CornerRadius = UDim.new(1, 0)
+    CircleCorner.Parent = Circle
+    
+    local enabled = false
+    ToggleButton.MouseButton1Click:Connect(function()
+        enabled = not enabled
+        ToggleButton.BackgroundColor3 = enabled and COLORS.ToggleOn or COLORS.ToggleOff
+        TweenService:Create(Circle, TweenInfo.new(0.2), {
+            Position = enabled and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+        }):Play()
+        if enabled then enableFunc() else disableFunc() end
+    end)
+    
+    ToggleFrame.MouseEnter:Connect(function() ToggleFrame.BackgroundColor3 = COLORS.Hover end)
+    ToggleFrame.MouseLeave:Connect(function() ToggleFrame.BackgroundColor3 = COLORS.Section end)
+end
+
+-- Функция создания слайдера
+local function CreatePlayerSlider(name, min, max, default, callback)
+    local SliderFrame = Instance.new("Frame")
+    SliderFrame.Size = UDim2.new(1, 0, 0, 45)
+    SliderFrame.BackgroundColor3 = COLORS.Section
+    SliderFrame.BorderSizePixel = 0
+    SliderFrame.Parent = PlayerContent
+    
+    local SliderCorner = Instance.new("UICorner")
+    SliderCorner.CornerRadius = UDim.new(0, 6)
+    SliderCorner.Parent = SliderFrame
+    
+    local SliderLabel = Instance.new("TextLabel")
+    SliderLabel.Size = UDim2.new(1, -20, 0, 20)
+    SliderLabel.Position = UDim2.new(0, 10, 0, 5)
+    SliderLabel.BackgroundTransparency = 1
+    SliderLabel.Text = name .. ": " .. default
+    SliderLabel.TextColor3 = COLORS.Text
+    SliderLabel.TextSize = 12
+    SliderLabel.Font = Enum.Font.Gotham
+    SliderLabel.TextXAlignment = Enum.TextXAlignment.Left
+    SliderLabel.Parent = SliderFrame
+    
+    local SliderBar = Instance.new("Frame")
+    SliderBar.Size = UDim2.new(1, -20, 0, 6)
+    SliderBar.Position = UDim2.new(0, 10, 0, 30)
+    SliderBar.BackgroundColor3 = COLORS.ToggleOff
+    SliderBar.BorderSizePixel = 0
+    SliderBar.Parent = SliderFrame
+    
+    local SliderBarCorner = Instance.new("UICorner")
+    SliderBarCorner.CornerRadius = UDim.new(1, 0)
+    SliderBarCorner.Parent = SliderBar
+    
+    local SliderFill = Instance.new("Frame")
+    SliderFill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
+    SliderFill.BackgroundColor3 = COLORS.Accent
+    SliderFill.BorderSizePixel = 0
+    SliderFill.Parent = SliderBar
+    
+    local SliderFillCorner = Instance.new("UICorner")
+    SliderFillCorner.CornerRadius = UDim.new(1, 0)
+    SliderFillCorner.Parent = SliderFill
+    
+    local SliderKnob = Instance.new("Frame")
+    SliderKnob.Size = UDim2.new(0, 12, 0, 12)
+    SliderKnob.Position = UDim2.new((default - min) / (max - min), -6, 0.5, -6)
+    SliderKnob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    SliderKnob.BorderSizePixel = 0
+    SliderKnob.Parent = SliderBar
+    
+    local SliderKnobCorner = Instance.new("UICorner")
+    SliderKnobCorner.CornerRadius = UDim.new(1, 0)
+    SliderKnobCorner.Parent = SliderKnob
+    
+    local value = default
+    local dragging = false
+    
+    SliderBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+        end
+    end)
+    
+    SliderBar.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local pos = input.Position.X - SliderBar.AbsolutePosition.X
+            local percent = math.clamp(pos / SliderBar.AbsoluteSize.X, 0, 1)
+            value = math.floor(min + (max - min) * percent)
+            SliderFill.Size = UDim2.new(percent, 0, 1, 0)
+            SliderKnob.Position = UDim2.new(percent, -6, 0.5, -6)
+            SliderLabel.Text = name .. ": " .. value
+            if callback then callback(value) end
+        end
+    end)
+end
+
+-- Добавляем функции
+CreatePlayerSlider("WalkSpeed", 16, 300, 16, function(v) WalkSpeed:Set(v) end)
+CreatePlayerSlider("JumpPower", 50, 300, 50, function(v) JumpPower:Set(v) end)
+
+CreatePlayerToggle("Bhop", function() Bhop:Enable() end, function() Bhop:Disable() end)
+CreatePlayerToggle("Noclip", function() Noclip:Enable() end, function() Noclip:Disable() end)
+CreatePlayerToggle("Fly", function() Fly:Enable() end, function() Fly:Disable() end)
+CreatePlayerToggle("Infinite Jump", function() InfiniteJump:Enable() end, function() InfiniteJump:Disable() end)
+
+-- Заголовок VISUAL
+local VisualLabel = Instance.new("TextLabel")
+VisualLabel.Size = UDim2.new(1, 0, 0, 20)
+VisualLabel.BackgroundTransparency = 1
+VisualLabel.Text = "VISUAL"
+VisualLabel.TextColor3 = COLORS.TextDim
+VisualLabel.TextSize = 11
+VisualLabel.Font = Enum.Font.GothamBold
+VisualLabel.TextXAlignment = Enum.TextXAlignment.Left
+VisualLabel.Parent = PlayerContent
+
+CreatePlayerToggle("Invis", function() Invis:Enable() end, function() Invis:Disable() end)
+CreatePlayerToggle("Fake Headless", function() FakeHeadless:Enable() end, function() FakeHeadless:Disable() end)
+CreatePlayerToggle("Fake Korblox", function() FakeKorblox:Enable() end, function() FakeKorblox:Disable() end)
+
+print("✅ Player tab loaded!")
