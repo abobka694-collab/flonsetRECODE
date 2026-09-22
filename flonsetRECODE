@@ -2147,15 +2147,23 @@ end)
 print("✅ All MISC functions loaded!")
 
 -- ═══════════════════════════════════════════════════════════════
--- GRAB GUN МОДУЛЬ (безопасный, без firetouchinterest)
+-- GRAB GUN - АВТОНОМНЫЙ КОД (работает без зависимостей)
 -- ═══════════════════════════════════════════════════════════════
 
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local LocalPlayer = Players.LocalPlayer
+
+-- ═══════════════════════════════════════════════════════════════
+-- GRAB GUN МОДУЛЬ
+-- ═══════════════════════════════════════════════════════════════
 local GrabGun = {}
 local GrabSettings = {
     Enabled = false,
-    GrabRange = 50, -- Радиус подбора в стадах
-    GrabSpeed = 80, -- Скорость перемещения
-    AutoGrab = true, -- Автоматически подбирать
+    GrabRange = 50,
+    GrabSpeed = 80,
 }
 
 local GrabThread = nil
@@ -2203,24 +2211,19 @@ end
 local function MoveToGun(gun)
     local myChar = LocalPlayer.Character
     local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-    local hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
-    
-    if not myRoot or not hum then return end
+    if not myRoot then return end
     
     local gunPart = GetGunPart(gun)
     if not gunPart or not gunPart.Parent then return end
     
-    -- Плавное перемещение (не мгновенный телепорт)
-    local targetPos = gunPart.Position + Vector3.new(0, 3, 0) -- Чуть выше пушки
+    local targetPos = gunPart.Position + Vector3.new(0, 3, 0)
     local direction = (targetPos - myRoot.Position).Unit
     local velocity = direction * GrabSettings.GrabSpeed
     
     myRoot.AssemblyLinearVelocity = Vector3.new(velocity.X, myRoot.AssemblyLinearVelocity.Y, velocity.Z)
     
-    -- Если очень близко - эмулируем касание
     local dist = (gunPart.Position - myRoot.Position).Magnitude
     if dist < 5 then
-        -- Быстрое перемещение прямо к пушке
         myRoot.CFrame = CFrame.new(gunPart.Position + Vector3.new(0, 3, 0))
         task.wait(0.1)
         myRoot.CFrame = CFrame.new(gunPart.Position + Vector3.new(0, 1, 0))
@@ -2231,54 +2234,92 @@ local function UpdateGrab()
     if not GrabSettings.Enabled then return end
     
     local now = tick()
-    if now - LastGrabTime < 0.5 then return end -- Задержка 0.5 сек
+    if now - LastGrabTime < 0.5 then return end
     
     local gun, dist = FindNearestGun()
     if gun and dist <= GrabSettings.GrabRange then
         LastGrabTime = now
         MoveToGun(gun)
-        print("✅ Grabbing gun! Distance: " .. string.format("%.1f", dist))
     end
 end
 
 function GrabGun:Enable()
     GrabSettings.Enabled = true
-    
     GrabThread = RunService.Heartbeat:Connect(function()
         pcall(UpdateGrab)
     end)
-    
     print("✅ Grab Gun enabled!")
 end
 
 function GrabGun:Disable()
     GrabSettings.Enabled = false
-    
     if GrabThread then
         GrabThread:Disconnect()
         GrabThread = nil
     end
-    
     print("❌ Grab Gun disabled!")
 end
 
-function GrabGun:SetGrabRange(value)
-    GrabSettings.GrabRange = value
+-- ═══════════════════════════════════════════════════════════════
+-- СОЗДАНИЕ GUI ЭЛЕМЕНТОВ
+-- ═══════════════════════════════════════════════════════════════
+
+-- Находим вкладку MISC в твоей GUI
+local ScreenGui = PlayerGui:FindFirstChild("FlonsetHUB")
+if not ScreenGui then
+    print("❌ FlonsetHUB GUI not found!")
+    return
 end
 
-function GrabGun:SetGrabSpeed(value)
-    GrabSettings.GrabSpeed = value
+local MainFrame = ScreenGui:FindFirstChild("Main")
+if not MainFrame then
+    print("❌ Main frame not found!")
+    return
 end
 
-function GrabGun:SetAutoGrab(value)
-    GrabSettings.AutoGrab = value
+local Content = MainFrame:FindFirstChild("Content")
+if not Content then
+    print("❌ Content frame not found!")
+    return
+end
+
+-- Находим вкладку MISC
+local Tabs = {}
+for _, child in ipairs(MainFrame:FindFirstChild("Sidebar"):GetChildren()) do
+    if child:IsA("TextButton") then
+        Tabs[child.Name] = child
+    end
+end
+
+local MiscTab = Tabs["MISC"]
+if not MiscTab then
+    print("❌ MISC tab not found!")
+    return
+end
+
+-- Находим контент вкладки MISC
+local MiscContent = Content:FindFirstChild("MISC_Content")
+if not MiscContent then
+    print("❌ MISC_Content not found!")
+    return
 end
 
 -- ═══════════════════════════════════════════════════════════════
--- ДОБАВЛЕНИЕ В MISC ВКЛАДКУ
--- ═══════════════════════════════════════════════════════════════
+-- СОЗДАНИЕ TOGGLE С ШЕСТЕРЕНКОЙ
+-- ══════════════════════════════════════════════════════════════
 
--- Заголовок "GRAB GUN"
+local COLORS = {
+    Section = Color3.fromRGB(22, 22, 35),
+    ToggleOff = Color3.fromRGB(60, 60, 80),
+    ToggleOn = Color3.fromRGB(80, 120, 255),
+    Text = Color3.fromRGB(220, 220, 230),
+    TextDim = Color3.fromRGB(140, 140, 160),
+    Accent = Color3.fromRGB(80, 120, 255),
+    Hover = Color3.fromRGB(30, 30, 50),
+    Background = Color3.fromRGB(18, 18, 28),
+}
+
+-- Заголовок
 local GrabLabel = Instance.new("TextLabel")
 GrabLabel.Size = UDim2.new(1, 0, 0, 20)
 GrabLabel.BackgroundTransparency = 1
@@ -2289,7 +2330,7 @@ GrabLabel.Font = Enum.Font.GothamBold
 GrabLabel.TextXAlignment = Enum.TextXAlignment.Left
 GrabLabel.Parent = MiscContent
 
--- Toggle с шестеренкой
+-- Toggle Frame
 local GrabToggleFrame = Instance.new("Frame")
 GrabToggleFrame.Size = UDim2.new(1, 0, 0, 32)
 GrabToggleFrame.BackgroundColor3 = COLORS.Section
@@ -2300,6 +2341,7 @@ local GrabToggleCorner = Instance.new("UICorner")
 GrabToggleCorner.CornerRadius = UDim.new(0, 6)
 GrabToggleCorner.Parent = GrabToggleFrame
 
+-- Label
 local GrabLabel2 = Instance.new("TextLabel")
 GrabLabel2.Size = UDim2.new(1, -90, 1, 0)
 GrabLabel2.Position = UDim2.new(0, 12, 0, 0)
@@ -2311,6 +2353,7 @@ GrabLabel2.Font = Enum.Font.Gotham
 GrabLabel2.TextXAlignment = Enum.TextXAlignment.Left
 GrabLabel2.Parent = GrabToggleFrame
 
+-- Toggle Button
 local GrabToggleButton = Instance.new("TextButton")
 GrabToggleButton.Size = UDim2.new(0, 36, 0, 20)
 GrabToggleButton.Position = UDim2.new(1, -80, 0.5, -10)
@@ -2323,6 +2366,7 @@ local GrabToggleButtonCorner = Instance.new("UICorner")
 GrabToggleButtonCorner.CornerRadius = UDim.new(1, 0)
 GrabToggleButtonCorner.Parent = GrabToggleButton
 
+-- Circle
 local GrabCircle = Instance.new("Frame")
 GrabCircle.Size = UDim2.new(0, 16, 0, 16)
 GrabCircle.Position = UDim2.new(0, 2, 0.5, -8)
@@ -2334,7 +2378,7 @@ local GrabCircleCorner = Instance.new("UICorner")
 GrabCircleCorner.CornerRadius = UDim.new(1, 0)
 GrabCircleCorner.Parent = GrabCircle
 
--- Шестеренка
+-- Gear Button
 local GrabGearButton = Instance.new("TextButton")
 GrabGearButton.Size = UDim2.new(0, 30, 0, 30)
 GrabGearButton.Position = UDim2.new(1, -40, 0.5, -15)
@@ -2349,6 +2393,10 @@ GrabGearButton.Parent = GrabToggleFrame
 local GrabGearCorner = Instance.new("UICorner")
 GrabGearCorner.CornerRadius = UDim.new(0, 6)
 GrabGearCorner.Parent = GrabGearButton
+
+-- ══════════════════════════════════════════════════════════════
+-- ЛОГИКА TOGGLE
+-- ═══════════════════════════════════════════════════════════════
 
 local GrabEnabled = false
 local GrabSettingsOpen = false
@@ -2389,207 +2437,4 @@ GrabGearButton.MouseButton1Click:Connect(function()
             
             local PanelCorner = Instance.new("UICorner")
             PanelCorner.CornerRadius = UDim.new(0, 6)
-            PanelCorner.Parent = GrabSettingsPanel
-            
-            local PanelLayout = Instance.new("UIListLayout")
-            PanelLayout.Padding = UDim.new(0, 4)
-            PanelLayout.SortOrder = Enum.SortOrder.LayoutOrder
-            PanelLayout.Parent = GrabSettingsPanel
-            
-            local PanelPadding = Instance.new("UIPadding")
-            PanelPadding.PaddingTop = UDim.new(0, 8)
-            PanelPadding.PaddingBottom = UDim.new(0, 8)
-            PanelPadding.PaddingLeft = UDim.new(0, 12)
-            PanelPadding.PaddingRight = UDim.new(0, 12)
-            PanelPadding.Parent = GrabSettingsPanel
-            
-            local PanelTitle = Instance.new("TextLabel")
-            PanelTitle.Size = UDim2.new(1, 0, 0, 20)
-            PanelTitle.BackgroundTransparency = 1
-            PanelTitle.Text = "Grab Gun Settings"
-            PanelTitle.TextColor3 = COLORS.Accent
-            PanelTitle.TextSize = 13
-            PanelTitle.Font = Enum.Font.GothamBold
-            PanelTitle.TextXAlignment = Enum.TextXAlignment.Left
-            PanelTitle.Parent = GrabSettingsPanel
-            
-            -- Слайдер Grab Range
-            local RangeFrame = Instance.new("Frame")
-            RangeFrame.Size = UDim2.new(1, 0, 0, 40)
-            RangeFrame.BackgroundColor3 = COLORS.Background
-            RangeFrame.BorderSizePixel = 0
-            RangeFrame.Parent = GrabSettingsPanel
-            
-            local RangeCorner = Instance.new("UICorner")
-            RangeCorner.CornerRadius = UDim.new(0, 4)
-            RangeCorner.Parent = RangeFrame
-            
-            local RangeLabel = Instance.new("TextLabel")
-            RangeLabel.Size = UDim2.new(1, -60, 0, 20)
-            RangeLabel.Position = UDim2.new(0, 8, 0, 5)
-            RangeLabel.BackgroundTransparency = 1
-            RangeLabel.Text = "Grab Range: " .. tostring(GrabSettings.GrabRange)
-            RangeLabel.TextColor3 = COLORS.Text
-            RangeLabel.TextSize = 11
-            RangeLabel.Font = Enum.Font.Gotham
-            RangeLabel.TextXAlignment = Enum.TextXAlignment.Left
-            RangeLabel.Parent = RangeFrame
-            
-            local RangeSlider = Instance.new("Frame")
-            RangeSlider.Size = UDim2.new(1, -20, 0, 6)
-            RangeSlider.Position = UDim2.new(0, 10, 0, 28)
-            RangeSlider.BackgroundColor3 = COLORS.ToggleOff
-            RangeSlider.BorderSizePixel = 0
-            RangeSlider.Parent = RangeFrame
-            
-            local RangeSliderCorner = Instance.new("UICorner")
-            RangeSliderCorner.CornerRadius = UDim.new(1, 0)
-            RangeSliderCorner.Parent = RangeSlider
-            
-            local RangeFill = Instance.new("Frame")
-            RangeFill.Size = UDim2.new((GrabSettings.GrabRange - 10) / 90, 0, 1, 0)
-            RangeFill.BackgroundColor3 = COLORS.Accent
-            RangeFill.BorderSizePixel = 0
-            RangeFill.Parent = RangeSlider
-            
-            local RangeFillCorner = Instance.new("UICorner")
-            RangeFillCorner.CornerRadius = UDim.new(1, 0)
-            RangeFillCorner.Parent = RangeFill
-            
-            local RangeKnob = Instance.new("Frame")
-            RangeKnob.Size = UDim2.new(0, 12, 0, 12)
-            RangeKnob.Position = UDim2.new((GrabSettings.GrabRange - 10) / 90, -6, 0.5, -6)
-            RangeKnob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-            RangeKnob.BorderSizePixel = 0
-            RangeKnob.Parent = RangeSlider
-            
-            local RangeKnobCorner = Instance.new("UICorner")
-            RangeKnobCorner.CornerRadius = UDim.new(1, 0)
-            RangeKnobCorner.Parent = RangeKnob
-            
-            local rangeDragging = false
-            RangeSlider.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    rangeDragging = true
-                end
-            end)
-            
-            RangeSlider.InputEnded:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    rangeDragging = false
-                end
-            end)
-            
-            UserInputService.InputChanged:Connect(function(input)
-                if rangeDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-                    local pos = input.Position.X - RangeSlider.AbsolutePosition.X
-                    local percent = math.clamp(pos / RangeSlider.AbsoluteSize.X, 0, 1)
-                    local range = 10 + percent * 90
-                    GrabSettings.GrabRange = range
-                    RangeFill.Size = UDim2.new(percent, 0, 1, 0)
-                    RangeKnob.Position = UDim2.new(percent, -6, 0.5, -6)
-                    RangeLabel.Text = "Grab Range: " .. string.format("%.0f", range)
-                    GrabGun:SetGrabRange(range)
-                end
-            end)
-            
-            -- Слайдер Grab Speed
-            local SpeedFrame = Instance.new("Frame")
-            SpeedFrame.Size = UDim2.new(1, 0, 0, 40)
-            SpeedFrame.BackgroundColor3 = COLORS.Background
-            SpeedFrame.BorderSizePixel = 0
-            SpeedFrame.Parent = GrabSettingsPanel
-            
-            local SpeedCorner = Instance.new("UICorner")
-            SpeedCorner.CornerRadius = UDim.new(0, 4)
-            SpeedCorner.Parent = SpeedFrame
-            
-            local SpeedLabel = Instance.new("TextLabel")
-            SpeedLabel.Size = UDim2.new(1, -60, 0, 20)
-            SpeedLabel.Position = UDim2.new(0, 8, 0, 5)
-            SpeedLabel.BackgroundTransparency = 1
-            SpeedLabel.Text = "Grab Speed: " .. tostring(GrabSettings.GrabSpeed)
-            SpeedLabel.TextColor3 = COLORS.Text
-            SpeedLabel.TextSize = 11
-            SpeedLabel.Font = Enum.Font.Gotham
-            SpeedLabel.TextXAlignment = Enum.TextXAlignment.Left
-            SpeedLabel.Parent = SpeedFrame
-            
-            local SpeedSlider = Instance.new("Frame")
-            SpeedSlider.Size = UDim2.new(1, -20, 0, 6)
-            SpeedSlider.Position = UDim2.new(0, 10, 0, 28)
-            SpeedSlider.BackgroundColor3 = COLORS.ToggleOff
-            SpeedSlider.BorderSizePixel = 0
-            SpeedSlider.Parent = SpeedFrame
-            
-            local SpeedSliderCorner = Instance.new("UICorner")
-            SpeedSliderCorner.CornerRadius = UDim.new(1, 0)
-            SpeedSliderCorner.Parent = SpeedSlider
-            
-            local SpeedFill = Instance.new("Frame")
-            SpeedFill.Size = UDim2.new((GrabSettings.GrabSpeed - 20) / 180, 0, 1, 0)
-            SpeedFill.BackgroundColor3 = COLORS.Accent
-            SpeedFill.BorderSizePixel = 0
-            SpeedFill.Parent = SpeedSlider
-            
-            local SpeedFillCorner = Instance.new("UICorner")
-            SpeedFillCorner.CornerRadius = UDim.new(1, 0)
-            SpeedFillCorner.Parent = SpeedFill
-            
-            local SpeedKnob = Instance.new("Frame")
-            SpeedKnob.Size = UDim2.new(0, 12, 0, 12)
-            SpeedKnob.Position = UDim2.new((GrabSettings.GrabSpeed - 20) / 180, -6, 0.5, -6)
-            SpeedKnob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-            SpeedKnob.BorderSizePixel = 0
-            SpeedKnob.Parent = SpeedSlider
-            
-            local SpeedKnobCorner = Instance.new("UICorner")
-            SpeedKnobCorner.CornerRadius = UDim.new(1, 0)
-            SpeedKnobCorner.Parent = SpeedKnob
-            
-            local speedDragging = false
-            SpeedSlider.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    speedDragging = true
-                end
-            end)
-            
-            SpeedSlider.InputEnded:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    speedDragging = false
-                end
-            end)
-            
-            UserInputService.InputChanged:Connect(function(input)
-                if speedDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-                    local pos = input.Position.X - SpeedSlider.AbsolutePosition.X
-                    local percent = math.clamp(pos / SpeedSlider.AbsoluteSize.X, 0, 1)
-                    local speed = 20 + percent * 180
-                    GrabSettings.GrabSpeed = speed
-                    SpeedFill.Size = UDim2.new(percent, 0, 1, 0)
-                    SpeedKnob.Position = UDim2.new(percent, -6, 0.5, -6)
-                    SpeedLabel.Text = "Grab Speed: " .. string.format("%.0f", speed)
-                    GrabGun:SetGrabSpeed(speed)
-                end
-            end)
-        end
-    else
-        if GrabSettingsPanel then
-            GrabSettingsPanel:Destroy()
-            GrabSettingsPanel = nil
-        end
-    end
-end)
-
--- Кнопка ручного подбора
-CreateButton(MiscContent, "Grab Nearest Gun (Manual)", function()
-    local gun, dist = FindNearestGun()
-    if gun then
-        MoveToGun(gun)
-        print("✅ Manual grab! Distance: " .. string.format("%.1f", dist))
-    else
-        print(" No gun found in range!")
-    end
-end)
-
-print("✅ Grab Gun loaded!")
+            PanelCorner.Parent = Grab
