@@ -698,36 +698,28 @@ ToggleMenu()
 print("✅ FlonsetHUB loaded!")
 print("🔑 Press [G] to toggle menu")
 
--- ══════════════════════════════════════════════════════════════
--- CHINA HAT МОДУЛЬ
+-- ═══════════════════════════════════════════════════════════════
+-- CHINA HAT МОДУЛЬ (исправленный)
 -- ═══════════════════════════════════════════════════════════════
 
 local ChinaHat = {}
 local HatSettings = {
     Enabled = false,
-    Color = Color3.fromRGB(180, 100, 255), -- Фиолетовый
+    Color = Color3.fromRGB(180, 100, 255),
     Transparency = 0.5,
     Size = 3,
 }
 
-local HatData = {}
+local HatPart = nil
 local HatThread = nil
 
-local function CreateHat(player)
-    if player == LocalPlayer then return end
-    if HatData[player] then return end
-    
-    local char = player.Character
-    if not char then return end
-    
-    local head = char:FindFirstChild("Head")
-    if not head then return end
+local function CreateHat()
+    if HatPart and HatPart.Parent then return end
     
     -- Создаем шляпу (конус)
     local hat = Instance.new("Part")
-    hat.Name = "FlonsetHat"
-    hat.Size = Vector3.new(HatSettings.Size, 0.3, HatSettings.Size)
-    hat.Shape = Enum.PartType.Cylinder
+    hat.Name = "FlonsetChinaHat"
+    hat.Size = Vector3.new(HatSettings.Size, 0.1, HatSettings.Size)
     hat.Material = Enum.Material.Neon
     hat.Color = HatSettings.Color
     hat.Transparency = HatSettings.Transparency
@@ -736,96 +728,57 @@ local function CreateHat(player)
     hat.Anchored = true
     hat.Parent = workspace
     
-    -- Позиционируем над головой
-    hat.CFrame = head.CFrame * CFrame.new(0, 2.5, 0) * CFrame.Angles(0, 0, math.rad(90))
+    -- Добавляем SpecialMesh для формы конуса
+    local mesh = Instance.new("SpecialMesh")
+    mesh.MeshType = Enum.MeshType.Cone
+    mesh.Scale = Vector3.new(1, 1, 1)
+    mesh.Parent = hat
     
-    HatData[player] = {
-        hat = hat,
-        head = head,
-    }
+    HatPart = hat
 end
 
-local function RemoveHat(player)
-    local data = HatData[player]
-    if not data then return end
-    
-    if data.hat then
-        pcall(function() data.hat:Destroy() end)
-    end
-    
-    HatData[player] = nil
-end
-
-local function UpdateHats()
+local function UpdateHat()
     if not HatSettings.Enabled then return end
     
-    for player, data in pairs(HatData) do
-        local char = player.Character
-        local head = char and char:FindFirstChild("Head")
-        
-        if not head or not char then
-            RemoveHat(player)
-            continue
-        end
-        
-        -- Обновляем позицию шляпы
-        if data.hat and data.hat.Parent then
-            data.hat.CFrame = head.CFrame * CFrame.new(0, 2.5, 0) * CFrame.Angles(0, 0, math.rad(90))
-            data.hat.Color = HatSettings.Color
-            data.hat.Transparency = HatSettings.Transparency
-        end
+    local char = LocalPlayer.Character
+    if not char then return end
+    
+    local head = char:FindFirstChild("Head")
+    if not head then return end
+    
+    if HatPart and HatPart.Parent then
+        -- Позиционируем над головой
+        HatPart.CFrame = head.CFrame * CFrame.new(0, 2.5, 0)
+        HatPart.Color = HatSettings.Color
+        HatPart.Transparency = HatSettings.Transparency
+        HatPart.Size = Vector3.new(HatSettings.Size, 0.1, HatSettings.Size)
     end
 end
 
 function ChinaHat:Enable()
     HatSettings.Enabled = true
     
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character then
-            CreateHat(player)
-        end
-    end
-    
-    ChinaHat.PlayerAddedConn = Players.PlayerAdded:Connect(function(player)
-        player.CharacterAdded:Connect(function()
-            task.wait(0.5)
-            if HatSettings.Enabled then
-                CreateHat(player)
-            end
-        end)
-    end)
-    
-    ChinaHat.PlayerRemovingConn = Players.PlayerRemoving:Connect(function(player)
-        RemoveHat(player)
-    end)
+    -- Создаем шляпу только для локального игрока
+    CreateHat()
     
     HatThread = RunService.Heartbeat:Connect(function()
-        pcall(UpdateHats)
+        pcall(UpdateHat)
     end)
     
-    print("✅ China Hat enabled!")
+    print("✅ China Hat enabled! (только для тебя)")
 end
 
 function ChinaHat:Disable()
     HatSettings.Enabled = false
-    
-    if ChinaHat.PlayerAddedConn then
-        ChinaHat.PlayerAddedConn:Disconnect()
-        ChinaHat.PlayerAddedConn = nil
-    end
-    
-    if ChinaHat.PlayerRemovingConn then
-        ChinaHat.PlayerRemovingConn:Disconnect()
-        ChinaHat.PlayerRemovingConn = nil
-    end
     
     if HatThread then
         HatThread:Disconnect()
         HatThread = nil
     end
     
-    for player in pairs(HatData) do
-        RemoveHat(player)
+    if HatPart then
+        pcall(function() HatPart:Destroy() end)
+        HatPart = nil
     end
     
     print("❌ China Hat disabled!")
