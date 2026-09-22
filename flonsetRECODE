@@ -1810,3 +1810,338 @@ CreateVisualToggle("X-Ray", function() XRay:Enable() end, function() XRay:Disabl
 CreateVisualToggle("Rainbow Mode", function() RainbowMode:Enable() end, function() RainbowMode:Disable() end)
 
 print("✅ All visuals loaded!")
+
+-- ══════════════════════════════════════════════════════════════
+-- ПОЛНЫЙ ПАКЕТ MISC
+-- ═══════════════════════════════════════════════════════════════
+
+local MiscContent = Tabs["MISC"].Content
+
+-- ═══════════════════════════════════════════════════════════════
+-- 1. ANTI-AFK (Защита от кика за бездействие)
+-- ═══════════════════════════════════════════════════════════════
+local AntiAFK = {}
+local AntiAFKEnabled = false
+local AFKConn = nil
+
+function AntiAFK:Enable()
+    AntiAFKEnabled = true
+    local VirtualUser = game:GetService("VirtualUser")
+    AFKConn = Players.LocalPlayer.Idled:Connect(function()
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new())
+    end)
+    print("✅ Anti-AFK enabled!")
+end
+
+function AntiAFK:Disable()
+    AntiAFKEnabled = false
+    if AFKConn then
+        AFKConn:Disconnect()
+        AFKConn = nil
+    end
+    print(" Anti-AFK disabled!")
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- 2. CLEAN UI (Убирает стандартный интерфейс Roblox)
+-- ═══════════════════════════════════════════════════════════════
+local CleanUI = {}
+local CleanUIEnabled = false
+local OriginalStates = {}
+
+function CleanUI:Enable()
+    CleanUIEnabled = true
+    local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+    
+    -- Сохраняем и скрываем элементы
+    for _, child in ipairs(PlayerGui:GetChildren()) do
+        if child:IsA("ScreenGui") and child.Name ~= "FlonsetHUB" then
+            OriginalStates[child] = child.Enabled
+            child.Enabled = false
+        end
+    end
+    
+    -- Скрываем Topbar
+    local StarterGui = game:GetService("StarterGui")
+    StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false)
+    
+    print("✅ Clean UI enabled!")
+end
+
+function CleanUI:Disable()
+    CleanUIEnabled = false
+    local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+    
+    -- Восстанавливаем элементы
+    for gui, state in pairs(OriginalStates) do
+        if gui and gui.Parent then
+            gui.Enabled = state
+        end
+    end
+    OriginalStates = {}
+    
+    -- Возвращаем Topbar
+    local StarterGui = game:GetService("StarterGui")
+    StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true)
+    
+    print(" Clean UI disabled!")
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- 3. HIT SOUND (Звук при убийстве/смерти игрока рядом)
+-- ═══════════════════════════════════════════════════════════════
+local HitSound = {}
+local HitSoundEnabled = false
+local HitSoundObj = nil
+local HitSoundConns = {}
+
+function HitSound:Enable()
+    HitSoundEnabled = true
+    
+    if not HitSoundObj then
+        HitSoundObj = Instance.new("Sound")
+        HitSoundObj.SoundId = "rbxassetid://562992647" -- Звук "Oof" или можно заменить на другой
+        HitSoundObj.Volume = 1
+        HitSoundObj.Parent = game:GetService("SoundService")
+    end
+    
+    -- Слушаем смерти всех игроков
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local hum = player.Character:FindFirstChildOfClass("Humanoid")
+            if hum then
+                local conn = hum.Died:Connect(function()
+                    if HitSoundEnabled then
+                        HitSoundObj:Play()
+                    end
+                end)
+                table.insert(HitSoundConns, conn)
+            end
+        end
+    end
+    
+    -- Для новых игроков
+    HitSound.AddedConn = Players.PlayerAdded:Connect(function(player)
+        player.CharacterAdded:Connect(function(char)
+            local hum = char:WaitForChild("Humanoid")
+            local conn = hum.Died:Connect(function()
+                if HitSoundEnabled then
+                    HitSoundObj:Play()
+                end
+            end)
+            table.insert(HitSoundConns, conn)
+        end)
+    end)
+    
+    print("✅ Hit Sound enabled!")
+end
+
+function HitSound:Disable()
+    HitSoundEnabled = false
+    
+    if HitSound.AddedConn then
+        HitSound.AddedConn:Disconnect()
+        HitSound.AddedConn = nil
+    end
+    
+    for _, conn in ipairs(HitSoundConns) do
+        conn:Disconnect()
+    end
+    HitSoundConns = {}
+    
+    print("❌ Hit Sound disabled!")
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- 4. NO FALL DAMAGE (Без урона от падения)
+-- ═══════════════════════════════════════════════════════════════
+local NoFall = {}
+local NoFallEnabled = false
+local NoFallConn = nil
+
+function NoFall:Enable()
+    NoFallEnabled = true
+    NoFallConn = RunService.Heartbeat:Connect(function()
+        if not NoFallEnabled then return end
+        local char = LocalPlayer.Character
+        if char then
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+                hum:SetStateEnabled(Enum.HumanoidStateType.Physics, false)
+            end
+        end
+    end)
+    print("✅ No Fall Damage enabled!")
+end
+
+function NoFall:Disable()
+    NoFallEnabled = false
+    if NoFallConn then
+        NoFallConn:Disconnect()
+        NoFallConn = nil
+    end
+    print("❌ No Fall Damage disabled!")
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- 5. КНОПКИ (Rejoin, Leave, Copy IP)
+-- ═══════════════════════════════════════════════════════════════
+local function CreateButton(parent, name, callback)
+    local ButtonFrame = Instance.new("Frame")
+    ButtonFrame.Size = UDim2.new(1, 0, 0, 32)
+    ButtonFrame.BackgroundColor3 = COLORS.Section
+    ButtonFrame.BorderSizePixel = 0
+    ButtonFrame.Parent = parent
+    
+    local ButtonCorner = Instance.new("UICorner")
+    ButtonCorner.CornerRadius = UDim.new(0, 6)
+    ButtonCorner.Parent = ButtonFrame
+    
+    local Button = Instance.new("TextButton")
+    Button.Size = UDim2.new(1, -20, 1, -4)
+    Button.Position = UDim2.new(0, 10, 0, 2)
+    Button.BackgroundColor3 = COLORS.AccentDark
+    Button.Text = name
+    Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Button.TextSize = 12
+    Button.Font = Enum.Font.GothamBold
+    Button.BorderSizePixel = 0
+    Button.Parent = ButtonFrame
+    
+    local ButtonTextCorner = Instance.new("UICorner")
+    ButtonTextCorner.CornerRadius = UDim.new(0, 4)
+    ButtonTextCorner.Parent = Button
+    
+    Button.MouseButton1Click:Connect(function()
+        pcall(callback)
+    end)
+    
+    Button.MouseEnter:Connect(function()
+        Button.BackgroundColor3 = COLORS.Accent
+    end)
+    Button.MouseLeave:Connect(function()
+        Button.BackgroundColor3 = COLORS.AccentDark
+    end)
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- ИНТЕГРАЦИЯ В GUI (Вкладка MISC)
+-- ═══════════════════════════════════════════════════════════════
+
+-- Заголовок "UTILITIES"
+local UtilLabel = Instance.new("TextLabel")
+UtilLabel.Size = UDim2.new(1, 0, 0, 20)
+UtilLabel.BackgroundTransparency = 1
+UtilLabel.Text = "UTILITIES"
+UtilLabel.TextColor3 = COLORS.TextDim
+UtilLabel.TextSize = 11
+UtilLabel.Font = Enum.Font.GothamBold
+UtilLabel.TextXAlignment = Enum.TextXAlignment.Left
+UtilLabel.Parent = MiscContent
+
+-- Toggle: Anti-AFK
+local function CreateMiscToggle(parent, name, enableFunc, disableFunc)
+    local ToggleFrame = Instance.new("Frame")
+    ToggleFrame.Size = UDim2.new(1, 0, 0, 32)
+    ToggleFrame.BackgroundColor3 = COLORS.Section
+    ToggleFrame.BorderSizePixel = 0
+    ToggleFrame.Parent = parent
+    
+    local ToggleCorner = Instance.new("UICorner")
+    ToggleCorner.CornerRadius = UDim.new(0, 6)
+    ToggleCorner.Parent = ToggleFrame
+    
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(1, -50, 1, 0)
+    Label.Position = UDim2.new(0, 12, 0, 0)
+    Label.BackgroundTransparency = 1
+    Label.Text = name
+    Label.TextColor3 = COLORS.Text
+    Label.TextSize = 12
+    Label.Font = Enum.Font.Gotham
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.Parent = ToggleFrame
+    
+    local ToggleButton = Instance.new("TextButton")
+    ToggleButton.Size = UDim2.new(0, 36, 0, 20)
+    ToggleButton.Position = UDim2.new(1, -44, 0.5, -10)
+    ToggleButton.BackgroundColor3 = COLORS.ToggleOff
+    ToggleButton.Text = ""
+    ToggleButton.BorderSizePixel = 0
+    ToggleButton.Parent = ToggleFrame
+    
+    local ToggleButtonCorner = Instance.new("UICorner")
+    ToggleButtonCorner.CornerRadius = UDim.new(1, 0)
+    ToggleButtonCorner.Parent = ToggleButton
+    
+    local Circle = Instance.new("Frame")
+    Circle.Size = UDim2.new(0, 16, 0, 16)
+    Circle.Position = UDim2.new(0, 2, 0.5, -8)
+    Circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Circle.BorderSizePixel = 0
+    Circle.Parent = ToggleButton
+    
+    local CircleCorner = Instance.new("UICorner")
+    CircleCorner.CornerRadius = UDim.new(1, 0)
+    CircleCorner.Parent = Circle
+    
+    local enabled = false
+    ToggleButton.MouseButton1Click:Connect(function()
+        enabled = not enabled
+        ToggleButton.BackgroundColor3 = enabled and COLORS.ToggleOn or COLORS.ToggleOff
+        TweenService:Create(Circle, TweenInfo.new(0.2), {
+            Position = enabled and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+        }):Play()
+        
+        if enabled then
+            enableFunc()
+        else
+            disableFunc()
+        end
+    end)
+    
+    ToggleFrame.MouseEnter:Connect(function() ToggleFrame.BackgroundColor3 = COLORS.Hover end)
+    ToggleFrame.MouseLeave:Connect(function() ToggleFrame.BackgroundColor3 = COLORS.Section end)
+end
+
+-- Добавляем тогглы
+CreateMiscToggle(MiscContent, "Anti-AFK", function() AntiAFK:Enable() end, function() AntiAFK:Disable() end)
+CreateMiscToggle(MiscContent, "Clean UI", function() CleanUI:Enable() end, function() CleanUI:Disable() end)
+CreateMiscToggle(MiscContent, "Hit Sound", function() HitSound:Enable() end, function() HitSound:Disable() end)
+CreateMiscToggle(MiscContent, "No Fall Damage", function() NoFall:Enable() end, function() NoFall:Disable() end)
+
+-- Заголовок "SERVER"
+local ServerLabel = Instance.new("TextLabel")
+ServerLabel.Size = UDim2.new(1, 0, 0, 20)
+ServerLabel.BackgroundTransparency = 1
+ServerLabel.Text = "SERVER"
+ServerLabel.TextColor3 = COLORS.TextDim
+ServerLabel.TextSize = 11
+ServerLabel.Font = Enum.Font.GothamBold
+ServerLabel.TextXAlignment = Enum.TextXAlignment.Left
+ServerLabel.Parent = MiscContent
+
+-- Кнопки
+CreateButton(MiscContent, "Rejoin Server", function()
+    game:GetService("TeleportService"):Teleport(game.PlaceId, LocalPlayer)
+end)
+
+CreateButton(MiscContent, "Leave Game", function()
+    game:GetService("TeleportService"):Teleport(173333898, LocalPlayer) -- Телепорт в пустую игру (или можно просто отключить)
+end)
+
+CreateButton(MiscContent, "Copy Server IP", function()
+    local ip = game:GetService("RbxAnalyticsService"):GetClientId()
+    setclipboard(ip)
+    print("✅ IP copied to clipboard!")
+end)
+
+CreateButton(MiscContent, "Destroy FlonsetHUB", function()
+    if PlayerGui:FindFirstChild("FlonsetHUB") then
+        PlayerGui:FindFirstChild("FlonsetHUB"):Destroy()
+    end
+end)
+
+print("✅ All MISC functions loaded!")
