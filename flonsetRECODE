@@ -570,3 +570,451 @@ ToggleMenu()
 
 print("✅ FlonsetHUB GUI loaded!")
 print("🔑 Press [G] to toggle menu")
+
+-- ═══════════════════════════════════════════════════════════════
+-- ESP МОДУЛЬ (Xeno Safe - через Highlight)
+-- ═══════════════════════════════════════════════════════════════
+
+local ESP = {}
+local ESPSettings = {
+    Enabled = false,
+    ShowBox = true,
+    ShowName = true,
+    ShowDistance = true,
+    ShowRole = true,
+    MaxDistance = 1000,
+    MurdererColor = Color3.fromRGB(255, 60, 60),
+    SheriffColor = Color3.fromRGB(0, 153, 255),
+    InnocentColor = Color3.fromRGB(255, 255, 255),
+}
+
+local ESP_Data = {}
+local ESPThread = nil
+
+local function GetPlayerRole(player)
+    if not player or not player.Parent then return "Innocent" end
+    local char = player.Character
+    local backpack = player:FindFirstChildOfClass("Backpack")
+    if (char and char:FindFirstChild("Gun")) or (backpack and backpack:FindFirstChild("Gun")) then
+        return "Sheriff"
+    end
+    if (char and char:FindFirstChild("Knife")) or (backpack and backpack:FindFirstChild("Knife")) then
+        return "Murderer"
+    end
+    return "Innocent"
+end
+
+local function GetRoleColor(role)
+    if role == "Murderer" then return ESPSettings.MurdererColor
+    elseif role == "Sheriff" then return ESPSettings.SheriffColor
+    else return ESPSettings.InnocentColor end
+end
+
+local function CreateESP(player)
+    if player == LocalPlayer then return end
+    if ESP_Data[player] then return end
+    
+    local data = { highlight = nil, billboard = nil, nameLabel = nil, distLabel = nil, roleLabel = nil }
+    
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "FlonsetESP_" .. player.Name
+    highlight.Adornee = player.Character
+    highlight.FillTransparency = 0.7
+    highlight.OutlineTransparency = 0
+    highlight.FillColor = ESPSettings.InnocentColor
+    highlight.OutlineColor = ESPSettings.InnocentColor
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Enabled = true
+    highlight.Parent = game:GetService("CoreGui")
+    data.highlight = highlight
+    
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "FlonsetBB_" .. player.Name
+    billboard.Adornee = player.Character:FindFirstChild("Head") or player.Character:FindFirstChild("HumanoidRootPart")
+    billboard.Size = UDim2.new(0, 200, 0, 50)
+    billboard.StudsOffset = Vector3.new(0, 3, 0)
+    billboard.AlwaysOnTop = true
+    billboard.ResetOnSpawn = false
+    billboard.Parent = game:GetService("CoreGui")
+    data.billboard = billboard
+    
+    if ESPSettings.ShowName then
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Name = "Name"
+        nameLabel.Size = UDim2.new(1, 0, 0, 20)
+        nameLabel.Position = UDim2.new(0, 0, 0, 0)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Text = player.DisplayName
+        nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        nameLabel.TextStrokeTransparency = 0
+        nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.TextSize = 14
+        nameLabel.Parent = billboard
+        data.nameLabel = nameLabel
+    end
+    
+    if ESPSettings.ShowDistance then
+        local distLabel = Instance.new("TextLabel")
+        distLabel.Name = "Distance"
+        distLabel.Size = UDim2.new(1, 0, 0, 15)
+        distLabel.Position = UDim2.new(0, 0, 0, 35)
+        distLabel.BackgroundTransparency = 1
+        distLabel.Text = "0m"
+        distLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+        distLabel.TextStrokeTransparency = 0
+        distLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        distLabel.Font = Enum.Font.Gotham
+        distLabel.TextSize = 12
+        distLabel.Parent = billboard
+        data.distLabel = distLabel
+    end
+    
+    if ESPSettings.ShowRole then
+        local roleLabel = Instance.new("TextLabel")
+        roleLabel.Name = "Role"
+        roleLabel.Size = UDim2.new(1, 0, 0, 15)
+        roleLabel.Position = UDim2.new(0, 0, 0, 20)
+        roleLabel.BackgroundTransparency = 1
+        roleLabel.Text = ""
+        roleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        roleLabel.TextStrokeTransparency = 0
+        roleLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        roleLabel.Font = Enum.Font.GothamBold
+        roleLabel.TextSize = 11
+        roleLabel.Parent = billboard
+        data.roleLabel = roleLabel
+    end
+    
+    ESP_Data[player] = data
+end
+
+local function RemoveESP(player)
+    local data = ESP_Data[player]
+    if not data then return end
+    if data.highlight then pcall(function() data.highlight:Destroy() end) end
+    if data.billboard then pcall(function() data.billboard:Destroy() end) end
+    ESP_Data[player] = nil
+end
+
+local function UpdateESP()
+    if not ESPSettings.Enabled then return end
+    local myChar = LocalPlayer.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player == LocalPlayer then continue end
+        local char = player.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        
+        if char and root and hum and hum.Health > 0 then
+            if not ESP_Data[player] then CreateESP(player) end
+            local data = ESP_Data[player]
+            if not data then continue end
+            
+            local role = GetPlayerRole(player)
+            local color = GetRoleColor(role)
+            
+            if data.highlight and ESPSettings.ShowBox then
+                data.highlight.Adornee = char
+                data.highlight.FillColor = color
+                data.highlight.OutlineColor = color
+                data.highlight.Enabled = true
+            elseif data.highlight then
+                data.highlight.Enabled = false
+            end
+            
+            if data.billboard then
+                local head = char:FindFirstChild("Head") or root
+                data.billboard.Adornee = head
+                
+                if data.distLabel and myRoot then
+                    local dist = (root.Position - myRoot.Position).Magnitude
+                    data.distLabel.Text = string.format("%.0fm", dist)
+                    data.billboard.Enabled = dist <= ESPSettings.MaxDistance
+                end
+                
+                if data.nameLabel and ESPSettings.ShowName then
+                    data.nameLabel.Text = player.DisplayName
+                    data.nameLabel.Visible = true
+                elseif data.nameLabel then
+                    data.nameLabel.Visible = false
+                end
+                
+                if data.roleLabel and ESPSettings.ShowRole then
+                    data.roleLabel.Text = "[" .. role .. "]"
+                    data.roleLabel.TextColor3 = color
+                    data.roleLabel.Visible = true
+                elseif data.roleLabel then
+                    data.roleLabel.Visible = false
+                end
+            end
+        else
+            if ESP_Data[player] then RemoveESP(player) end
+        end
+    end
+end
+
+function ESP:Enable()
+    ESPSettings.Enabled = true
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then CreateESP(player) end
+    end
+    ESP.PlayerAddedConn = Players.PlayerAdded:Connect(function(player)
+        player.CharacterAdded:Connect(function()
+            task.wait(0.5)
+            if ESPSettings.Enabled then CreateESP(player) end
+        end)
+    end)
+    ESP.PlayerRemovingConn = Players.PlayerRemoving:Connect(function(player)
+        RemoveESP(player)
+    end)
+    ESPThread = RunService.Heartbeat:Connect(function() pcall(UpdateESP) end)
+    print("✅ ESP enabled!")
+end
+
+function ESP:Disable()
+    ESPSettings.Enabled = false
+    if ESP.PlayerAddedConn then ESP.PlayerAddedConn:Disconnect() ESP.PlayerAddedConn = nil end
+    if ESP.PlayerRemovingConn then ESP.PlayerRemovingConn:Disconnect() ESP.PlayerRemovingConn = nil end
+    if ESPThread then ESPThread:Disconnect() ESPThread = nil end
+    for player in pairs(ESP_Data) do RemoveESP(player) end
+    print("❌ ESP disabled!")
+end
+
+function ESP:SetShowBox(v) ESPSettings.ShowBox = v end
+function ESP:SetShowName(v) ESPSettings.ShowName = v end
+function ESP:SetShowDistance(v) ESPSettings.ShowDistance = v end
+function ESP:SetShowRole(v) ESPSettings.ShowRole = v end
+function ESP:SetMaxDistance(v) ESPSettings.MaxDistance = v end
+
+-- ═══════════════════════════════════════════════════════════════
+-- ДОБАВЛЕНИЕ В VISUALS ВКЛАДКУ С ШЕСТЕРЕНКОЙ
+-- ═══════════════════════════════════════════════════════════════
+
+local VisualsContent = Tabs["VISUALS"].Content
+
+-- Функция создания Toggle с шестеренкой
+local function CreateToggleWithSettings(parent, name, default, settingsCallback)
+    local ToggleFrame = Instance.new("Frame")
+    ToggleFrame.Size = UDim2.new(1, 0, 0, 32)
+    ToggleFrame.BackgroundColor3 = COLORS.Section
+    ToggleFrame.BorderSizePixel = 0
+    ToggleFrame.Parent = parent
+    
+    local ToggleCorner = Instance.new("UICorner")
+    ToggleCorner.CornerRadius = UDim.new(0, 6)
+    ToggleCorner.Parent = ToggleFrame
+    
+    -- Название
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(1, -90, 1, 0)
+    Label.Position = UDim2.new(0, 12, 0, 0)
+    Label.BackgroundTransparency = 1
+    Label.Text = name
+    Label.TextColor3 = COLORS.Text
+    Label.TextSize = 12
+    Label.Font = Enum.Font.Gotham
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.Parent = ToggleFrame
+    
+    -- Переключатель
+    local ToggleButton = Instance.new("TextButton")
+    ToggleButton.Size = UDim2.new(0, 36, 0, 20)
+    ToggleButton.Position = UDim2.new(1, -80, 0.5, -10)
+    ToggleButton.BackgroundColor3 = default and COLORS.ToggleOn or COLORS.ToggleOff
+    ToggleButton.Text = ""
+    ToggleButton.BorderSizePixel = 0
+    ToggleButton.Parent = ToggleFrame
+    
+    local ToggleButtonCorner = Instance.new("UICorner")
+    ToggleButtonCorner.CornerRadius = UDim.new(1, 0)
+    ToggleButtonCorner.Parent = ToggleButton
+    
+    local ToggleCircle = Instance.new("Frame")
+    ToggleCircle.Size = UDim2.new(0, 16, 0, 16)
+    ToggleCircle.Position = default and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+    ToggleCircle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    ToggleCircle.BorderSizePixel = 0
+    ToggleCircle.Parent = ToggleButton
+    
+    local ToggleCircleCorner = Instance.new("UICorner")
+    ToggleCircleCorner.CornerRadius = UDim.new(1, 0)
+    ToggleCircleCorner.Parent = ToggleCircle
+    
+    -- Шестеренка (кнопка настроек)
+    local SettingsButton = Instance.new("TextButton")
+    SettingsButton.Size = UDim2.new(0, 30, 0, 30)
+    SettingsButton.Position = UDim2.new(1, -40, 0.5, -15)
+    SettingsButton.BackgroundColor3 = COLORS.Section
+    SettingsButton.Text = ""
+    SettingsButton.TextColor3 = COLORS.TextDim
+    SettingsButton.TextSize = 16
+    SettingsButton.Font = Enum.Font.GothamBold
+    SettingsButton.BorderSizePixel = 0
+    SettingsButton.Parent = ToggleFrame
+    
+    local SettingsCorner = Instance.new("UICorner")
+    SettingsCorner.CornerRadius = UDim.new(0, 6)
+    SettingsCorner.Parent = SettingsButton
+    
+    local state = default
+    local settingsOpen = false
+    
+    ToggleButton.MouseButton1Click:Connect(function()
+        state = not state
+        ToggleButton.BackgroundColor3 = state and COLORS.ToggleOn or COLORS.ToggleOff
+        TweenService:Create(ToggleCircle, TweenInfo.new(0.2), {
+            Position = state and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+        }):Play()
+        if settingsCallback then settingsCallback(state) end
+    end)
+    
+    SettingsButton.MouseButton1Click:Connect(function()
+        settingsOpen = not settingsOpen
+        if settingsCallback then settingsCallback(state, settingsOpen) end
+    end)
+    
+    ToggleFrame.MouseEnter:Connect(function()
+        ToggleFrame.BackgroundColor3 = COLORS.Hover
+    end)
+    ToggleFrame.MouseLeave:Connect(function()
+        ToggleFrame.BackgroundColor3 = COLORS.Section
+    end)
+    
+    SettingsButton.MouseEnter:Connect(function()
+        SettingsButton.BackgroundColor3 = COLORS.Hover
+        SettingsButton.TextColor3 = COLORS.Accent
+    end)
+    SettingsButton.MouseLeave:Connect(function()
+        SettingsButton.BackgroundColor3 = COLORS.Section
+        SettingsButton.TextColor3 = COLORS.TextDim
+    end)
+end
+
+-- ESP Toggle с шестеренкой
+local ESPSettingsPanel = nil
+
+CreateToggleWithSettings(VisualsContent, "ESP", false, function(state, settingsOpen)
+    if state then
+        ESP:Enable()
+    else
+        ESP:Disable()
+        if ESPSettingsPanel then
+            ESPSettingsPanel:Destroy()
+            ESPSettingsPanel = nil
+        end
+    end
+    
+    -- Показываем/скрываем панель настроек
+    if settingsOpen then
+        if not ESPSettingsPanel then
+            ESPSettingsPanel = Instance.new("Frame")
+            ESPSettingsPanel.Size = UDim2.new(1, -20, 0, 0)
+            ESPSettingsPanel.BackgroundColor3 = COLORS.Section
+            ESPSettingsPanel.BorderSizePixel = 0
+            ESPSettingsPanel.AutomaticSize = Enum.AutomaticSize.Y
+            ESPSettingsPanel.Parent = VisualsContent
+            
+            local PanelCorner = Instance.new("UICorner")
+            PanelCorner.CornerRadius = UDim.new(0, 6)
+            PanelCorner.Parent = ESPSettingsPanel
+            
+            local PanelLayout = Instance.new("UIListLayout")
+            PanelLayout.Padding = UDim.new(0, 4)
+            PanelLayout.SortOrder = Enum.SortOrder.LayoutOrder
+            PanelLayout.Parent = ESPSettingsPanel
+            
+            local PanelPadding = Instance.new("UIPadding")
+            PanelPadding.PaddingTop = UDim.new(0, 8)
+            PanelPadding.PaddingBottom = UDim.new(0, 8)
+            PanelPadding.PaddingLeft = UDim.new(0, 12)
+            PanelPadding.PaddingRight = UDim.new(0, 12)
+            PanelPadding.Parent = ESPSettingsPanel
+            
+            -- Заголовок панели
+            local PanelTitle = Instance.new("TextLabel")
+            PanelTitle.Size = UDim2.new(1, 0, 0, 20)
+            PanelTitle.BackgroundTransparency = 1
+            PanelTitle.Text = "ESP Settings"
+            PanelTitle.TextColor3 = COLORS.Accent
+            PanelTitle.TextSize = 13
+            PanelTitle.Font = Enum.Font.GothamBold
+            PanelTitle.TextXAlignment = Enum.TextXAlignment.Left
+            PanelTitle.Parent = ESPSettingsPanel
+            
+            -- Настройки
+            local function AddSettingToggle(name, default, callback)
+                local SettingFrame = Instance.new("Frame")
+                SettingFrame.Size = UDim2.new(1, 0, 0, 28)
+                SettingFrame.BackgroundColor3 = COLORS.Background
+                SettingFrame.BorderSizePixel = 0
+                SettingFrame.Parent = ESPSettingsPanel
+                
+                local SettingCorner = Instance.new("UICorner")
+                SettingCorner.CornerRadius = UDim.new(0, 4)
+                SettingCorner.Parent = SettingFrame
+                
+                local SettingLabel = Instance.new("TextLabel")
+                SettingLabel.Size = UDim2.new(1, -50, 1, 0)
+                SettingLabel.Position = UDim2.new(0, 8, 0, 0)
+                SettingLabel.BackgroundTransparency = 1
+                SettingLabel.Text = name
+                SettingLabel.TextColor3 = COLORS.Text
+                SettingLabel.TextSize = 11
+                SettingLabel.Font = Enum.Font.Gotham
+                SettingLabel.TextXAlignment = Enum.TextXAlignment.Left
+                SettingLabel.Parent = SettingFrame
+                
+                local SettingToggle = Instance.new("TextButton")
+                SettingToggle.Size = UDim2.new(0, 36, 0, 18)
+                SettingToggle.Position = UDim2.new(1, -44, 0.5, -9)
+                SettingToggle.BackgroundColor3 = default and COLORS.ToggleOn or COLORS.ToggleOff
+                SettingToggle.Text = ""
+                SettingToggle.BorderSizePixel = 0
+                SettingToggle.Parent = SettingFrame
+                
+                local SettingToggleCorner = Instance.new("UICorner")
+                SettingToggleCorner.CornerRadius = UDim.new(1, 0)
+                SettingToggleCorner.Parent = SettingToggle
+                
+                local SettingCircle = Instance.new("Frame")
+                SettingCircle.Size = UDim2.new(0, 14, 0, 14)
+                SettingCircle.Position = default and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
+                SettingCircle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                SettingCircle.BorderSizePixel = 0
+                SettingCircle.Parent = SettingToggle
+                
+                local SettingCircleCorner = Instance.new("UICorner")
+                SettingCircleCorner.CornerRadius = UDim.new(1, 0)
+                SettingCircleCorner.Parent = SettingCircle
+                
+                local settingState = default
+                SettingToggle.MouseButton1Click:Connect(function()
+                    settingState = not settingState
+                    SettingToggle.BackgroundColor3 = settingState and COLORS.ToggleOn or COLORS.ToggleOff
+                    TweenService:Create(SettingCircle, TweenInfo.new(0.15), {
+                        Position = settingState and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
+                    }):Play()
+                    if callback then callback(settingState) end
+                end)
+            end
+            
+            AddSettingToggle("Show Box", ESPSettings.ShowBox, function(v) ESP:SetShowBox(v) end)
+            AddSettingToggle("Show Name", ESPSettings.ShowName, function(v) ESP:SetShowName(v) end)
+            AddSettingToggle("Show Distance", ESPSettings.ShowDistance, function(v) ESP:SetShowDistance(v) end)
+            AddSettingToggle("Show Role", ESPSettings.ShowRole, function(v) ESP:SetShowRole(v) end)
+        end
+    else
+        if ESPSettingsPanel then
+            ESPSettingsPanel:Destroy()
+            ESPSettingsPanel = nil
+        end
+    end
+end)
+
+-- Gun ESP (без настроек)
+CreateToggleWithSettings(VisualsContent, "Gun ESP", false, function(state)
+    print("Gun ESP:", state)
+end
