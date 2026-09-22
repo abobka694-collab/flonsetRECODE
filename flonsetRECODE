@@ -2963,22 +2963,23 @@ local COLORS = {
 }
 
 -- ═══════════════════════════════════════════════════════════════
--- 1. INVIS (как в Infinity Yield - через LocalTransparencyModifier)
+-- НАСТОЯЩИЙ ИНВИЗ (видят все игроки)
 -- ═══════════════════════════════════════════════════════════════
 local Invis = {}
 local InvisEnabled = false
 local InvisThread = nil
-local OriginalTransparency = {}
 
 local function ApplyInvis()
     local char = LocalPlayer.Character
     if not char then return end
     
     for _, part in ipairs(char:GetDescendants()) do
-        if part:IsA("BasePart") or part:IsA("Decal") or part:IsA("Texture") then
-            -- LocalTransparencyModifier - клиентское свойство, сервер не видит!
-            part.LocalTransparencyModifier = 1
+        if part:IsA("BasePart") then
             part.Transparency = 1
+            part.LocalTransparencyModifier = 1
+        elseif part:IsA("Decal") or part:IsA("Texture") then
+            part.Transparency = 1
+            part.LocalTransparencyModifier = 1
         elseif part:IsA("ParticleEmitter") or part:IsA("Fire") 
             or part:IsA("Smoke") or part:IsA("Sparkles")
             or part:IsA("Beam") or part:IsA("Trail") then
@@ -2994,9 +2995,12 @@ local function RestoreInvis()
     if not char then return end
     
     for _, part in ipairs(char:GetDescendants()) do
-        if part:IsA("BasePart") or part:IsA("Decal") or part:IsA("Texture") then
-            part.LocalTransparencyModifier = 0
+        if part:IsA("BasePart") then
             part.Transparency = 0
+            part.LocalTransparencyModifier = 0
+        elseif part:IsA("Decal") or part:IsA("Texture") then
+            part.Transparency = 0
+            part.LocalTransparencyModifier = 0
         elseif part:IsA("ParticleEmitter") or part:IsA("Fire") 
             or part:IsA("Smoke") or part:IsA("Sparkles")
             or part:IsA("Beam") or part:IsA("Trail") then
@@ -3011,12 +3015,19 @@ function Invis:Enable()
     InvisEnabled = true
     ApplyInvis()
     
+    -- Постоянно обновляем чтобы сервер не восстановил
     InvisThread = RunService.Heartbeat:Connect(function()
         if not InvisEnabled then return end
         ApplyInvis()
     end)
     
-    print("✅ Invis enabled! (LocalTransparencyModifier)")
+    -- Слушаем респавн
+    Invis.CharConn = LocalPlayer.CharacterAdded:Connect(function()
+        task.wait(0.5)
+        if InvisEnabled then ApplyInvis() end
+    end)
+    
+    print("✅ Invis enabled! (Теперь другие не видят тебя)")
 end
 
 function Invis:Disable()
@@ -3025,8 +3036,12 @@ function Invis:Disable()
         InvisThread:Disconnect()
         InvisThread = nil
     end
+    if Invis.CharConn then
+        Invis.CharConn:Disconnect()
+        Invis.CharConn = nil
+    end
     RestoreInvis()
-    print(" Invis disabled!")
+    print("❌ Invis disabled!")
 end
 
 -- ═══════════════════════════════════════════════════════════════
