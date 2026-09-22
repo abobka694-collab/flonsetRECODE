@@ -2146,3 +2146,322 @@ end)
 
 print("✅ All MISC functions loaded!")
 
+-- ═══════════════════════════════════════════════════════════════
+-- COMBAT ВКЛАДКА
+-- ═══════════════════════════════════════════════════════════════
+
+local CombatContent = Tabs["COMBAT"].Content
+
+-- ═══════════════════════════════════════════════════════════════
+-- SILENT AIM МОДУЛЬ
+-- ═══════════════════════════════════════════════════════════════
+local SilentAim = {}
+local SilentSettings = {
+    Enabled = false,
+    FOV = 200,
+    TargetPart = "HumanoidRootPart",
+    Prediction = true,
+    ForceShoot = false,
+    MaxDistance = 500,
+}
+
+local SilentThread = nil
+local NamecallHook = nil
+local OriginalNamecall = nil
+
+local function GetTargetInFOV()
+    local mousePos = UserInputService:GetMouseLocation()
+    local closestPlayer = nil
+    local closestDistance = SilentSettings.FOV
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player == LocalPlayer then continue end
+        local char = player.Character
+        if not char then continue end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum or hum.Health <= 0 then continue end
+        
+        local part = char:FindFirstChild(SilentSettings.TargetPart) or char:FindFirstChild("HumanoidRootPart")
+        if not part then continue end
+        
+        local myChar = LocalPlayer.Character
+        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        if myRoot then
+            local distance = (part.Position - myRoot.Position).Magnitude
+            if distance > SilentSettings.MaxDistance then continue end
+        end
+        
+        if not SilentSettings.ForceShoot then
+            local rayParams = RaycastParams.new()
+            rayParams.FilterType = Enum.RaycastFilterType.Exclude
+            rayParams.FilterDescendantsInstances = {myChar, char}
+            local myHead = myChar and myChar:FindFirstChild("Head")
+            if myHead then
+                local result = workspace:Raycast(myHead.Position, part.Position - myHead.Position, rayParams)
+                if result and result.Instance ~= part then continue end
+            end
+        end
+        
+        local screenPos, onScreen = workspace.CurrentCamera:WorldToViewportPoint(part.Position)
+        if not onScreen then continue end
+        
+        local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+        if distance < closestDistance then
+            closestDistance = distance
+            closestPlayer = player
+        end
+    end
+    
+    return closestPlayer
+end
+
+local function PredictPosition(part)
+    if not SilentSettings.Prediction then return part.Position end
+    local velocity = Vector3.zero
+    local ok, vel = pcall(function() return part.AssemblyLinearVelocity end)
+    if ok and typeof(vel) == "Vector3" then velocity = vel end
+    local ping = 0
+    local ok2, p = pcall(function() return LocalPlayer:GetNetworkPing() end)
+    if ok2 and type(p) == "number" then ping = p end
+    return part.Position + velocity * ping
+end
+
+function SilentAim:Enable()
+    SilentSettings.Enabled = true
+    if hookmetamethod then
+        OriginalNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+            local method = getnamecallmethod()
+            if SilentSettings.Enabled and method == "FireServer" then
+                if self and self.Name == "Shoot" and self.Parent and self.Parent.Name == "Gun" then
+                    local args = {...}
+                    local myChar = LocalPlayer.Character
+                    if myChar and (self.Parent:IsDescendantOf(myChar) or self.Parent:IsDescendantOf(LocalPlayer:FindFirstChildOfClass("Backpack"))) then
+                        local target = GetTargetInFOV()
+                        if target then
+                            local char = target.Character
+                            local part = char:FindFirstChild(SilentSettings.TargetPart) or char:FindFirstChild("HumanoidRootPart")
+                            if part then
+                                local targetPos = PredictPosition(part)
+                                local startCFrame = args[1]
+                                if typeof(startCFrame) == "CFrame" then
+                                    return OriginalNamecall(self, startCFrame, CFrame.new(startCFrame.Position, targetPos), select(3, ...))
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            return OriginalNamecall(self, ...)
+        end)
+    end
+    print("✅ Silent Aim enabled!")
+end
+
+function SilentAim:Disable()
+    SilentSettings.Enabled = false
+    if OriginalNamecall and hookmetamethod then
+        hookmetamethod(game, "__namecall", OriginalNamecall)
+        OriginalNamecall = nil
+    end
+    print("❌ Silent Aim disabled!")
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- AUTO SHOOT МОДУЛЬ
+-- ═══════════════════════════════════════════════════════════════
+local AutoShoot = {}
+local AutoShootSettings = {
+    Enabled = false,
+    Delay = 0.1,
+}
+
+local AutoShootThread = nil
+local LastShot = 0
+
+function AutoShoot:Enable()
+    AutoShootSettings.Enabled = true
+    AutoShootThread = RunService.Heartbeat:Connect(function()
+        if not AutoShootSettings.Enabled then return end
+        local now = tick()
+        if now - LastShot < AutoShootSettings.Delay then return end
+        
+        local myChar = LocalPlayer.Character
+        local gun = myChar and myChar:FindFirstChild("Gun")
+        if not gun then
+            local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+            gun = backpack and backpack:FindFirstChild("Gun")
+        end
+        
+        if gun then
+            local shoot = gun:FindFirstChild("Shoot")
+            if shoot and shoot:IsA("RemoteEvent") then
+                local camera = workspace.CurrentCamera
+                local startCFrame = camera.CFrame
+                local aimCFrame = camera.CFrame * CFrame.new(0, 0, -100)
+                shoot:FireServer(startCFrame, aimCFrame)
+                LastShot = now
+            end
+        end
+    end)
+    print("✅ Auto Shoot enabled!")
+end
+
+function AutoShoot:Disable()
+    AutoShootSettings.Enabled = false
+    if AutoShootThread then
+        AutoShootThread:Disconnect()
+        AutoShootThread = nil
+    end
+    print("❌ Auto Shoot disabled!")
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- KILL AURA МОДУЛЬ
+-- ═══════════════════════════════════════════════════════════════
+local KillAura = {}
+local AuraSettings = {
+    Enabled = false,
+    Range = 10,
+}
+
+local AuraThread = nil
+
+function KillAura:Enable()
+    AuraSettings.Enabled = true
+    AuraThread = RunService.Heartbeat:Connect(function()
+        if not AuraSettings.Enabled then return end
+        local myChar = LocalPlayer.Character
+        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        if not myRoot then return end
+        
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player == LocalPlayer then continue end
+            local char = player.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            if root then
+                local dist = (root.Position - myRoot.Position).Magnitude
+                if dist <= AuraSettings.Range then
+                    local gun = myChar:FindFirstChild("Gun")
+                    if gun then
+                        local shoot = gun:FindFirstChild("Shoot")
+                        if shoot and shoot:IsA("RemoteEvent") then
+                            local startCFrame = myRoot.CFrame
+                            local aimCFrame = CFrame.new(myRoot.Position, root.Position)
+                            shoot:FireServer(startCFrame, aimCFrame)
+                        end
+                    end
+                end
+            end
+        end
+    end)
+    print("✅ Kill Aura enabled!")
+end
+
+function KillAura:Disable()
+    AuraSettings.Enabled = false
+    if AuraThread then
+        AuraThread:Disconnect()
+        AuraThread = nil
+    end
+    print("❌ Kill Aura disabled!")
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- GUI ЭЛЕМЕНТЫ COMBAT
+-- ══════════════════════════════════════════════════════════════
+
+-- Заголовок
+local CombatLabel = Instance.new("TextLabel")
+CombatLabel.Size = UDim2.new(1, 0, 0, 20)
+CombatLabel.BackgroundTransparency = 1
+CombatLabel.Text = "COMBAT"
+CombatLabel.TextColor3 = COLORS.TextDim
+CombatLabel.TextSize = 11
+CombatLabel.Font = Enum.Font.GothamBold
+CombatLabel.TextXAlignment = Enum.TextXAlignment.Left
+CombatLabel.Parent = CombatContent
+
+-- Функция создания toggle с шестеренкой
+local function CreateCombatToggle(name, enableFunc, disableFunc)
+    local ToggleFrame = Instance.new("Frame")
+    ToggleFrame.Size = UDim2.new(1, 0, 0, 32)
+    ToggleFrame.BackgroundColor3 = COLORS.Section
+    ToggleFrame.BorderSizePixel = 0
+    ToggleFrame.Parent = CombatContent
+    
+    local ToggleCorner = Instance.new("UICorner")
+    ToggleCorner.CornerRadius = UDim.new(0, 6)
+    ToggleCorner.Parent = ToggleFrame
+    
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(1, -90, 1, 0)
+    Label.Position = UDim2.new(0, 12, 0, 0)
+    Label.BackgroundTransparency = 1
+    Label.Text = name
+    Label.TextColor3 = COLORS.Text
+    Label.TextSize = 12
+    Label.Font = Enum.Font.Gotham
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.Parent = ToggleFrame
+    
+    local ToggleButton = Instance.new("TextButton")
+    ToggleButton.Size = UDim2.new(0, 36, 0, 20)
+    ToggleButton.Position = UDim2.new(1, -80, 0.5, -10)
+    ToggleButton.BackgroundColor3 = COLORS.ToggleOff
+    ToggleButton.Text = ""
+    ToggleButton.BorderSizePixel = 0
+    ToggleButton.Parent = ToggleFrame
+    
+    local ToggleButtonCorner = Instance.new("UICorner")
+    ToggleButtonCorner.CornerRadius = UDim.new(1, 0)
+    ToggleButtonCorner.Parent = ToggleButton
+    
+    local Circle = Instance.new("Frame")
+    Circle.Size = UDim2.new(0, 16, 0, 16)
+    Circle.Position = UDim2.new(0, 2, 0.5, -8)
+    Circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Circle.BorderSizePixel = 0
+    Circle.Parent = ToggleButton
+    
+    local CircleCorner = Instance.new("UICorner")
+    CircleCorner.CornerRadius = UDim.new(1, 0)
+    CircleCorner.Parent = Circle
+    
+    local GearButton = Instance.new("TextButton")
+    GearButton.Size = UDim2.new(0, 30, 0, 30)
+    GearButton.Position = UDim2.new(1, -40, 0.5, -15)
+    GearButton.BackgroundColor3 = COLORS.Section
+    GearButton.Text = ""
+    GearButton.TextColor3 = COLORS.TextDim
+    GearButton.TextSize = 16
+    GearButton.Font = Enum.Font.GothamBold
+    GearButton.BorderSizePixel = 0
+    GearButton.Parent = ToggleFrame
+    
+    local GearCorner = Instance.new("UICorner")
+    GearCorner.CornerRadius = UDim.new(0, 6)
+    GearCorner.Parent = GearButton
+    
+    local enabled = false
+    
+    ToggleButton.MouseButton1Click:Connect(function()
+        enabled = not enabled
+        ToggleButton.BackgroundColor3 = enabled and COLORS.ToggleOn or COLORS.ToggleOff
+        TweenService:Create(Circle, TweenInfo.new(0.2), {
+            Position = enabled and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+        }):Play()
+        if enabled then enableFunc() else disableFunc() end
+    end)
+    
+    ToggleFrame.MouseEnter:Connect(function() ToggleFrame.BackgroundColor3 = COLORS.Hover end)
+    ToggleFrame.MouseLeave:Connect(function() ToggleFrame.BackgroundColor3 = COLORS.Section end)
+    GearButton.MouseEnter:Connect(function() GearButton.BackgroundColor3 = COLORS.Hover end)
+    GearButton.MouseLeave:Connect(function() GearButton.BackgroundColor3 = COLORS.Section end)
+end
+
+-- Добавляем функции
+CreateCombatToggle("Silent Aim", function() SilentAim:Enable() end, function() SilentAim:Disable() end)
+CreateCombatToggle("Auto Shoot", function() AutoShoot:Enable() end, function() AutoShoot:Disable() end)
+CreateCombatToggle("Kill Aura", function() KillAura:Enable() end, function() KillAura:Disable() end)
+
+print("✅ Combat tab loaded!")
