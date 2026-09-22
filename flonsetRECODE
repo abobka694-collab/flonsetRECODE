@@ -2437,4 +2437,121 @@ GrabGearButton.MouseButton1Click:Connect(function()
             
             local PanelCorner = Instance.new("UICorner")
             PanelCorner.CornerRadius = UDim.new(0, 6)
-            PanelCorner.Parent = Grab
+            PanelCorner.Parent = GrabSettingsPanel
+            
+            local PanelLayout = Instance.new("UIListLayout")
+            PanelLayout.Padding = UDim.new(0, 4)
+            PanelLayout.SortOrder = Enum.SortOrder.LayoutOrder
+            PanelLayout.Parent = GrabSettingsPanel
+            
+            local PanelPadding = Instance.new("UIPadding")
+            PanelPadding.PaddingTop = UDim.new(0, 8)
+            PanelPadding.PaddingBottom = UDim.new(0, 8)
+            PanelPadding.PaddingLeft = UDim.new(0, 12)
+            PanelPadding.PaddingRight = UDim.new(0, 12)
+            PanelPadding.Parent = GrabSettingsPanel
+            
+            local PanelTitle = Instance.new("TextLabel")
+            PanelTitle.Size = UDim2.new(1, 0, 0, 20)
+            PanelTitle.BackgroundTransparency = 1
+            PanelTitle.Text = "Grab Gun Settings"
+            PanelTitle.TextColor3 = COLORS.Accent
+            PanelTitle.TextSize = 13
+            PanelTitle.Font = Enum.Font.GothamBold
+            PanelTitle.TextXAlignment = Enum.TextXAlignment.Left
+            PanelTitle.Parent = GrabSettingsPanel
+            
+            -- Grab Range Slider
+            local RangeFrame = Instance.new("Frame")
+            RangeFrame.Size = UDim2.new(1, 0, 0, 40)
+            RangeFrame.BackgroundColor3 = COLORS.Background
+            RangeFrame.BorderSizePixel = 0
+            RangeFrame.Parent = GrabSettingsPanel
+            
+            local RangeCorner = Instance.new("UICorner")
+            RangeCorner.CornerRadius = UDim.new(0, 4)
+            RangeCorner.Parent = RangeFrame
+            
+            local RangeLabel = Instance.new("TextLabel")
+            RangeLabel.Size = UDim2.new(1, -60, 0, 20)
+            RangeLabel.Position = UDim2.new(0, 8, 0, 5)
+            RangeLabel.BackgroundTransparency = 1
+            RangeLabel.Text = "Grab Range: " .. tostring(GrabSettings.GrabRange)
+            RangeLabel.TextColor3 = COLORS.Text
+            RangeLabel.TextSize = 11
+            RangeLabel.Font = Enum.Font.Gotham
+            RangeLabel.TextXAlignment = Enum.TextXAlignment.Left
+            RangeLabel.Parent = RangeFrame
+            
+            local RangeSlider = Instance.new("Frame")
+            RangeSlider.Size = UDim2.new(1, -20, 0, 6)
+            RangeSlider.Position = UDim2.new(0, 10, 0, 28)
+            RangeSlider.BackgroundColor3 = COLORS.ToggleOff
+            RangeSlider.BorderSizePixel = 0
+            RangeSlider.Parent = RangeFrame
+            
+            local RangeSliderCorner = Instance.new("UICorner")
+            RangeSliderCorner.CornerRadius = UDim.new(1, 0)
+            RangeSliderCorner.Parent = RangeSlider
+            
+            local RangeFill = Instance.new("Frame")
+            RangeFill.Size = UDim2.new((GrabSettings.GrabRange - 10) / 90, 0, 1, 0)
+            RangeFill.BackgroundColor3 = COLORS.Accent
+            RangeFill.BorderSizePixel = 0
+            RangeFill.Parent = RangeSlider
+            
+            local RangeFillCorner = Instance.new("UICorner")
+            RangeFillCorner.CornerRadius = UDim.new(1, 0)
+            RangeFillCorner.Parent = RangeFill
+            
+            local RangeKnob = Instance.new("Frame")
+            RangeKnob.Size = UDim2.new(0, 12, 0, 12)
+            RangeKnob.Position = UDim2.new((GrabSettings.GrabRange - 10) / 90, -6, 0.5, -6)
+            RangeKnob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            RangeKnob.BorderSizePixel = 0
+            RangeKnob.Parent = RangeSlider
+            
+            local RangeKnobCorner = Instance.new("UICorner")
+            RangeKnobCorner.CornerRadius = UDim.new(1, 0)
+            RangeKnobCorner.Parent = RangeKnob
+            
+            local rangeDragging = false
+            RangeSlider.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                    rangeDragging = true
+                end
+            end)
+            
+            RangeSlider.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                    rangeDragging = false
+                end
+            end)
+            
+            UserInputService.InputChanged:Connect(function(input)
+                if rangeDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                    local pos = input.Position.X - RangeSlider.AbsolutePosition.X
+                    local percent = math.clamp(pos / RangeSlider.AbsoluteSize.X, 0, 1)
+                    local range = 10 + percent * 90
+                    GrabSettings.GrabRange = range
+                    RangeFill.Size = UDim2.new(percent, 0, 1, 0)
+                    RangeKnob.Position = UDim2.new(percent, -6, 0.5, -6)
+                    RangeLabel.Text = "Grab Range: " .. string.format("%.0f", range)
+                end
+            end)
+        end
+    else
+        if GrabSettingsPanel then
+            GrabSettingsPanel:Destroy()
+            GrabSettingsPanel = nil
+        end
+    end
+end)
+
+-- Hover эффекты
+GrabToggleFrame.MouseEnter:Connect(function() GrabToggleFrame.BackgroundColor3 = COLORS.Hover end)
+GrabToggleFrame.MouseLeave:Connect(function() GrabToggleFrame.BackgroundColor3 = COLORS.Section end)
+GrabGearButton.MouseEnter:Connect(function() GrabGearButton.BackgroundColor3 = COLORS.Hover end)
+GrabGearButton.MouseLeave:Connect(function() GrabGearButton.BackgroundColor3 = COLORS.Section end)
+
+print("✅ Grab Gun GUI created!")
