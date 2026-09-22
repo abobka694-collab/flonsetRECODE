@@ -1125,65 +1125,94 @@ CreateToggle(Tabs["PLAYER"].Content, "Infinite Jump", false, function(v)
     end
 end)
 
--- Invis (настоящий, видят все)
-CreateSectionLabel(Tabs["PLAYER"].Content, "👻 VISUAL")
-local InvisEnabled = false
-local InvisThread = nil
-local InvisCharConn = nil
+-- ═══════════════════════════════════════════════════════════════
+-- ПОЛУВИДИМЫЙ ИНВИЗ (эффект призрака)
+-- ═══════════════════════════════════════════════════════════════
+local GhostEnabled = false
+local GhostConnections = {}
+local GHOST_TRANSPARENCY = 0.65 -- 0 = полностью видимый, 1 = полностью невидимый
 
-local function ApplyInvis()
-    local char = LocalPlayer.Character
-    if not char then return end
-    for _, part in ipairs(char:GetDescendants()) do
-        if part:IsA("BasePart") then
-            part.Transparency = 1
-            part.LocalTransparencyModifier = 1
-        elseif part:IsA("Decal") or part:IsA("Texture") then
-            part.Transparency = 1
-            part.LocalTransparencyModifier = 1
-        elseif part:IsA("ParticleEmitter") or part:IsA("Fire") or part:IsA("Smoke") or part:IsA("Sparkles") or part:IsA("Beam") or part:IsA("Trail") then
-            part.Enabled = false
-        elseif part:IsA("ForceField") then
-            part.Visible = false
-        end
+local function MakeGhost(part)
+    if part:IsA("BasePart") or part:IsA("Decal") or part:IsA("Texture") then
+        part.Transparency = GHOST_TRANSPARENCY
+        part.LocalTransparencyModifier = GHOST_TRANSPARENCY
+    elseif part:IsA("ParticleEmitter") or part:IsA("Fire") or part:IsA("Smoke") or part:IsA("Sparkles") or part:IsA("Beam") or part:IsA("Trail") then
+        part.Enabled = false
+    elseif part:IsA("ForceField") then
+        part.Visible = false
     end
 end
 
-local function RestoreInvis()
+local function ApplyGhost()
     local char = LocalPlayer.Character
     if not char then return end
     for _, part in ipairs(char:GetDescendants()) do
-        if part:IsA("BasePart") then
-            part.Transparency = 0
-            part.LocalTransparencyModifier = 0
-        elseif part:IsA("Decal") or part:IsA("Texture") then
-            part.Transparency = 0
-            part.LocalTransparencyModifier = 0
-        elseif part:IsA("ParticleEmitter") or part:IsA("Fire") or part:IsA("Smoke") or part:IsA("Sparkles") or part:IsA("Beam") or part:IsA("Trail") then
-            part.Enabled = true
-        elseif part:IsA("ForceField") then
-            part.Visible = true
-        end
+        MakeGhost(part)
     end
 end
 
-CreateToggle(Tabs["PLAYER"].Content, "Invis", false, function(v)
-    InvisEnabled = v
-    if v then
-        ApplyInvis()
-        InvisThread = RunService.Heartbeat:Connect(function()
-            if not InvisEnabled then return end
-            ApplyInvis()
-        end)
-        InvisCharConn = LocalPlayer.CharacterAdded:Connect(function()
-            task.wait(0.5)
-            if InvisEnabled then ApplyInvis() end
-        end)
-    else
-        if InvisThread then InvisThread:Disconnect() InvisThread = nil end
-        if InvisCharConn then InvisCharConn:Disconnect() InvisCharConn = nil end
-        RestoreInvis()
+local function onChildAdded(child)
+    if GhostEnabled then
+        MakeGhost(child)
     end
+end
+
+local function EnableGhost()
+    GhostEnabled = true
+    ApplyGhost()
+    
+    local char = LocalPlayer.Character
+    if char then
+        local conn = char.DescendantAdded:Connect(onChildAdded)
+        table.insert(GhostConnections, conn)
+    end
+    
+    GhostConnections.CharAdded = LocalPlayer.CharacterAdded:Connect(function(newChar)
+        task.wait(0.1)
+        if GhostEnabled then
+            ApplyGhost()
+            local conn = newChar.DescendantAdded:Connect(onChildAdded)
+            table.insert(GhostConnections, conn)
+        end
+    end)
+    
+    GhostConnections.Render = RunService.RenderStepped:Connect(function()
+        if GhostEnabled then 
+            ApplyGhost() 
+        end
+    end)
+    
+    print("✅ Ghost mode enabled! (Transparency: " .. GHOST_TRANSPARENCY .. ")")
+end
+
+local function DisableGhost()
+    GhostEnabled = false
+    
+    for _, conn in ipairs(GhostConnections) do
+        pcall(function() conn:Disconnect() end)
+    end
+    GhostConnections = {}
+    
+    local char = LocalPlayer.Character
+    if char then
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") or part:IsA("Decal") or part:IsA("Texture") then
+                part.Transparency = 0
+                part.LocalTransparencyModifier = 0
+            elseif part:IsA("ParticleEmitter") or part:IsA("Fire") or part:IsA("Smoke") or part:IsA("Sparkles") or part:IsA("Beam") or part:IsA("Trail") then
+                part.Enabled = true
+            elseif part:IsA("ForceField") then
+                part.Visible = true
+            end
+        end
+    end
+    
+    print("❌ Ghost mode disabled!")
+end
+
+-- В GUI:
+CreateToggle(Tabs["PLAYER"].Content, "Ghost Mode", false, function(v)
+    if v then EnableGhost() else DisableGhost() end
 end)
 
 -- Fake Headless
