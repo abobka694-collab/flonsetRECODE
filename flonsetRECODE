@@ -1091,3 +1091,722 @@ ChinaHatGearButton.MouseButton1Click:Connect(function()
 end)
 
 print("✅ China Hat loaded!")
+
+-- ═══════════════════════════════════════════════════════════════
+-- ПОЛНЫЙ ПАКЕТ VISUALS
+-- ═══════════════════════════════════════════════════════════════
+
+-- ═══════════════════════════════════════════════════════════════
+-- 1. GUN ESP (подсветка пушек)
+-- ══════════════════════════════════════════════════════════════
+local GunESP = {}
+local GunESPSettings = {
+    Enabled = false,
+    Color = Color3.fromRGB(255, 215, 0),
+    MaxDistance = 500,
+}
+
+local GunESP_Data = {}
+local GunESPThread = nil
+
+local function GetGunPart(obj)
+    if obj:IsA("BasePart") then return obj end
+    if obj:IsA("Model") then return obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true) end
+    return obj:FindFirstChild("Handle") or obj:FindFirstChildWhichIsA("BasePart", true)
+end
+
+local function IsInCharacter(obj)
+    local node = obj.Parent
+    while node and node ~= workspace do
+        if node:IsA("Model") and Players:GetPlayerFromCharacter(node) then return true end
+        node = node.Parent
+    end
+    return false
+end
+
+local function CreateGunESP(obj)
+    if GunESP_Data[obj] then return end
+    if not obj or not obj.Parent then return end
+    if IsInCharacter(obj) then return end
+    
+    local part = GetGunPart(obj)
+    if not part then return end
+    
+    local data = { highlight = nil, billboard = nil }
+    
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "FlonsetGunHL"
+    highlight.Adornee = obj
+    highlight.FillTransparency = 0.7
+    highlight.OutlineTransparency = 0
+    highlight.FillColor = GunESPSettings.Color
+    highlight.OutlineColor = GunESPSettings.Color
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Enabled = true
+    highlight.Parent = CoreGui
+    data.highlight = highlight
+    
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "FlonsetGunBB"
+    billboard.Adornee = part
+    billboard.Size = UDim2.new(0, 100, 0, 30)
+    billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+    billboard.AlwaysOnTop = true
+    billboard.ResetOnSpawn = false
+    billboard.Parent = CoreGui
+    
+    local txt = Instance.new("TextLabel")
+    txt.Size = UDim2.new(1, 0, 1, 0)
+    txt.BackgroundTransparency = 1
+    txt.Text = " GUN"
+    txt.TextColor3 = GunESPSettings.Color
+    txt.TextStrokeTransparency = 0
+    txt.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    txt.Font = Enum.Font.GothamBold
+    txt.TextSize = 16
+    txt.Parent = billboard
+    
+    data.billboard = billboard
+    GunESP_Data[obj] = data
+end
+
+local function RemoveGunESP(obj)
+    local data = GunESP_Data[obj]
+    if not data then return end
+    if data.highlight then pcall(function() data.highlight:Destroy() end) end
+    if data.billboard then pcall(function() data.billboard:Destroy() end) end
+    GunESP_Data[obj] = nil
+end
+
+local function UpdateGunESP()
+    if not GunESPSettings.Enabled then return end
+    local myChar = LocalPlayer.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    
+    for obj, data in pairs(GunESP_Data) do
+        if not obj or not obj.Parent or IsInCharacter(obj) then
+            RemoveGunESP(obj)
+            continue
+        end
+        local part = GetGunPart(obj)
+        if not part or not part.Parent then
+            RemoveGunESP(obj)
+            continue
+        end
+        if myRoot then
+            local dist = (part.Position - myRoot.Position).Magnitude
+            if dist > GunESPSettings.MaxDistance then
+                if data.highlight then data.highlight.Enabled = false end
+                if data.billboard then data.billboard.Enabled = false end
+            else
+                if data.highlight then
+                    data.highlight.Adornee = obj
+                    data.highlight.FillColor = GunESPSettings.Color
+                    data.highlight.OutlineColor = GunESPSettings.Color
+                    data.highlight.Enabled = true
+                end
+                if data.billboard then
+                    data.billboard.Adornee = part
+                    data.billboard.Enabled = true
+                end
+            end
+        end
+    end
+end
+
+function GunESP:Enable()
+    GunESPSettings.Enabled = true
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj.Name == "GunDrop" and (obj:IsA("BasePart") or obj:IsA("Model") or obj:IsA("Tool")) and not IsInCharacter(obj) then
+            CreateGunESP(obj)
+        end
+    end
+    GunESP.AddedConn = workspace.DescendantAdded:Connect(function(descendant)
+        if descendant.Name == "GunDrop" and (descendant:IsA("BasePart") or descendant:IsA("Model") or descendant:IsA("Tool")) then
+            task.wait(0.1)
+            if GunESPSettings.Enabled and descendant.Parent then CreateGunESP(descendant) end
+        end
+    end)
+    GunESP.RemovingConn = workspace.DescendantRemoving:Connect(function(descendant)
+        if descendant.Name == "GunDrop" and GunESP_Data[descendant] then RemoveGunESP(descendant) end
+    end)
+    GunESPThread = RunService.Heartbeat:Connect(function() pcall(UpdateGunESP) end)
+    print("✅ Gun ESP enabled!")
+end
+
+function GunESP:Disable()
+    GunESPSettings.Enabled = false
+    if GunESP.AddedConn then GunESP.AddedConn:Disconnect() GunESP.AddedConn = nil end
+    if GunESP.RemovingConn then GunESP.RemovingConn:Disconnect() GunESP.RemovingConn = nil end
+    if GunESPThread then GunESPThread:Disconnect() GunESPThread = nil end
+    for obj in pairs(GunESP_Data) do RemoveGunESP(obj) end
+    print("❌ Gun ESP disabled!")
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- 2. FULLBRIGHT (убрать темноту)
+-- ═══════════════════════════════════════════════════════════════
+local Fullbright = {}
+local FullbrightSettings = {
+    Enabled = false,
+    Brightness = 2,
+    Ambient = Color3.fromRGB(128, 128, 128),
+}
+
+local OriginalLighting = {}
+
+function Fullbright:Enable()
+    FullbrightSettings.Enabled = true
+    local Lighting = game:GetService("Lighting")
+    
+    OriginalLighting.Brightness = Lighting.Brightness
+    OriginalLighting.Ambient = Lighting.Ambient
+    OriginalLighting.ClockTime = Lighting.ClockTime
+    OriginalLighting.GlobalShadows = Lighting.GlobalShadows
+    OriginalLighting.OutdoorAmbient = Lighting.OutdoorAmbient
+    
+    Lighting.Brightness = FullbrightSettings.Brightness
+    Lighting.Ambient = FullbrightSettings.Ambient
+    Lighting.ClockTime = 14
+    Lighting.GlobalShadows = false
+    Lighting.OutdoorAmbient = FullbrightSettings.Ambient
+    
+    print("✅ Fullbright enabled!")
+end
+
+function Fullbright:Disable()
+    FullbrightSettings.Enabled = false
+    local Lighting = game:GetService("Lighting")
+    
+    if OriginalLighting.Brightness then Lighting.Brightness = OriginalLighting.Brightness end
+    if OriginalLighting.Ambient then Lighting.Ambient = OriginalLighting.Ambient end
+    if OriginalLighting.ClockTime then Lighting.ClockTime = OriginalLighting.ClockTime end
+    if OriginalLighting.GlobalShadows ~= nil then Lighting.GlobalShadows = OriginalLighting.GlobalShadows end
+    if OriginalLighting.OutdoorAmbient then Lighting.OutdoorAmbient = OriginalLighting.OutdoorAmbient end
+    
+    print("❌ Fullbright disabled!")
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- 3. NO FOG (убрать туман)
+-- ══════════════════════════════════════════════════════════════
+local NoFog = {}
+local NoFogSettings = { Enabled = false }
+local OriginalFog = {}
+
+function NoFog:Enable()
+    NoFogSettings.Enabled = true
+    local Lighting = game:GetService("Lighting")
+    
+    OriginalFog.FogStart = Lighting.FogStart
+    OriginalFog.FogEnd = Lighting.FogEnd
+    OriginalFog.FogColor = Lighting.FogColor
+    
+    Lighting.FogStart = 0
+    Lighting.FogEnd = 100000
+    Lighting.FogColor = Color3.fromRGB(0, 0, 0)
+    
+    print("✅ No Fog enabled!")
+end
+
+function NoFog:Disable()
+    NoFogSettings.Enabled = false
+    local Lighting = game:GetService("Lighting")
+    
+    if OriginalFog.FogStart then Lighting.FogStart = OriginalFog.FogStart end
+    if OriginalFog.FogEnd then Lighting.FogEnd = OriginalFog.FogEnd end
+    if OriginalFog.FogColor then Lighting.FogColor = OriginalFog.FogColor end
+    
+    print("❌ No Fog disabled!")
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- 4. PLAYER GLOW (неоновое свечение)
+-- ═══════════════════════════════════════════════════════════════
+local PlayerGlow = {}
+local GlowSettings = {
+    Enabled = false,
+    Color = Color3.fromRGB(0, 255, 255),
+    FillTransparency = 0.5,
+}
+
+local GlowData = {}
+local GlowThread = nil
+
+local function CreateGlow(player)
+    if player == LocalPlayer then return end
+    if GlowData[player] then return end
+    
+    local char = player.Character
+    if not char then return end
+    
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "FlonsetGlow"
+    highlight.Adornee = char
+    highlight.FillTransparency = GlowSettings.FillTransparency
+    highlight.OutlineTransparency = 0
+    highlight.FillColor = GlowSettings.Color
+    highlight.OutlineColor = GlowSettings.Color
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Enabled = true
+    highlight.Parent = CoreGui
+    
+    GlowData[player] = highlight
+end
+
+local function RemoveGlow(player)
+    local highlight = GlowData[player]
+    if highlight then
+        pcall(function() highlight:Destroy() end)
+    end
+    GlowData[player] = nil
+end
+
+function PlayerGlow:Enable()
+    GlowSettings.Enabled = true
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then CreateGlow(player) end
+    end
+    PlayerGlow.AddedConn = Players.PlayerAdded:Connect(function(player)
+        player.CharacterAdded:Connect(function()
+            task.wait(0.5)
+            if GlowSettings.Enabled then CreateGlow(player) end
+        end)
+    end)
+    PlayerGlow.RemovingConn = Players.PlayerRemoving:Connect(function(player)
+        RemoveGlow(player)
+    end)
+    print("✅ Player Glow enabled!")
+end
+
+function PlayerGlow:Disable()
+    GlowSettings.Enabled = false
+    if PlayerGlow.AddedConn then PlayerGlow.AddedConn:Disconnect() PlayerGlow.AddedConn = nil end
+    if PlayerGlow.RemovingConn then PlayerGlow.RemovingConn:Disconnect() PlayerGlow.RemovingConn = nil end
+    for player in pairs(GlowData) do RemoveGlow(player) end
+    print("❌ Player Glow disabled!")
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- 5. TRACERS (линии к игрокам)
+-- ═══════════════════════════════════════════════════════════════
+local Tracers = {}
+local TracerSettings = {
+    Enabled = false,
+    Color = Color3.fromRGB(255, 255, 255),
+    Thickness = 1,
+}
+
+local TracerData = {}
+local TracerThread = nil
+
+local function CreateTracer(player)
+    if player == LocalPlayer then return end
+    if TracerData[player] then return end
+    
+    local line = Instance.new("Part")
+    line.Name = "FlonsetTracer"
+    line.Size = Vector3.new(0.1, 0.1, 1)
+    line.Material = Enum.Material.Neon
+    line.Color = TracerSettings.Color
+    line.Transparency = 0
+    line.CanCollide = false
+    line.CanQuery = false
+    line.Anchored = true
+    line.Parent = workspace
+    
+    TracerData[player] = line
+end
+
+local function RemoveTracer(player)
+    local line = TracerData[player]
+    if line then pcall(function() line:Destroy() end) end
+    TracerData[player] = nil
+end
+
+local function UpdateTracers()
+    if not TracerSettings.Enabled then return end
+    
+    local camera = workspace.CurrentCamera
+    local myChar = LocalPlayer.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+    
+    for player, line in pairs(TracerData) do
+        local char = player.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        
+        if not root or not char then
+            RemoveTracer(player)
+            continue
+        end
+        
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum or hum.Health <= 0 then
+            RemoveTracer(player)
+            continue
+        end
+        
+        -- Позиция от камеры к игроку
+        local startPos = camera.CFrame.Position
+        local endPos = root.Position
+        
+        local distance = (endPos - startPos).Magnitude
+        local midPoint = (startPos + endPos) / 2
+        
+        line.Size = Vector3.new(0.05, 0.05, distance)
+        line.CFrame = CFrame.lookAt(startPos, endPos) * CFrame.new(0, 0, -distance / 2)
+        line.Color = TracerSettings.Color
+    end
+end
+
+function Tracers:Enable()
+    TracerSettings.Enabled = true
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then CreateTracer(player) end
+    end
+    Tracers.AddedConn = Players.PlayerAdded:Connect(function(player)
+        player.CharacterAdded:Connect(function()
+            task.wait(0.5)
+            if TracerSettings.Enabled then CreateTracer(player) end
+        end)
+    end)
+    Tracers.RemovingConn = Players.PlayerRemoving:Connect(function(player)
+        RemoveTracer(player)
+    end)
+    TracerThread = RunService.Heartbeat:Connect(function() pcall(UpdateTracers) end)
+    print("✅ Tracers enabled!")
+end
+
+function Tracers:Disable()
+    TracerSettings.Enabled = false
+    if Tracers.AddedConn then Tracers.AddedConn:Disconnect() Tracers.AddedConn = nil end
+    if Tracers.RemovingConn then Tracers.RemovingConn:Disconnect() Tracers.RemovingConn = nil end
+    if TracerThread then TracerThread:Disconnect() TracerThread = nil end
+    for player in pairs(TracerData) do RemoveTracer(player) end
+    print("❌ Tracers disabled!")
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- 6. CUSTOM CROSSHAIR (кастомный прицел)
+-- ═══════════════════════════════════════════════════════════════
+local CustomCrosshair = {}
+local CrosshairSettings = {
+    Enabled = false,
+    Color = Color3.fromRGB(0, 255, 0),
+    Size = 20,
+    Thickness = 2,
+}
+
+local CrosshairGui = nil
+
+function CustomCrosshair:Enable()
+    CrosshairSettings.Enabled = true
+    
+    if not CrosshairGui then
+        CrosshairGui = Instance.new("ScreenGui")
+        CrosshairGui.Name = "FlonsetCrosshair"
+        CrosshairGui.ResetOnSpawn = false
+        CrosshairGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        CrosshairGui.IgnoreGuiInset = true
+        CrosshairGui.Parent = PlayerGui
+        
+        -- Горизонтальная линия
+        local hLine = Instance.new("Frame")
+        hLine.Name = "HLine"
+        hLine.Size = UDim2.new(0, CrosshairSettings.Size, 0, CrosshairSettings.Thickness)
+        hLine.Position = UDim2.new(0.5, -CrosshairSettings.Size / 2, 0.5, -CrosshairSettings.Thickness / 2)
+        hLine.BackgroundColor3 = CrosshairSettings.Color
+        hLine.BorderSizePixel = 0
+        hLine.Parent = CrosshairGui
+        
+        -- Вертикальная линия
+        local vLine = Instance.new("Frame")
+        vLine.Name = "VLine"
+        vLine.Size = UDim2.new(0, CrosshairSettings.Thickness, 0, CrosshairSettings.Size)
+        vLine.Position = UDim2.new(0.5, -CrosshairSettings.Thickness / 2, 0.5, -CrosshairSettings.Size / 2)
+        vLine.BackgroundColor3 = CrosshairSettings.Color
+        vLine.BorderSizePixel = 0
+        vLine.Parent = CrosshairGui
+    end
+    
+    print("✅ Custom Crosshair enabled!")
+end
+
+function CustomCrosshair:Disable()
+    CrosshairSettings.Enabled = false
+    if CrosshairGui then
+        CrosshairGui:Destroy()
+        CrosshairGui = nil
+    end
+    print(" Custom Crosshair disabled!")
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- 7. FOV CHANGER (изменение поля зрения)
+-- ═══════════════════════════════════════════════════════════════
+local FOVChanger = {}
+local FOVSettings = {
+    Enabled = false,
+    FOV = 90,
+}
+
+local OriginalFOV = nil
+
+function FOVChanger:Enable()
+    FOVSettings.Enabled = true
+    local camera = workspace.CurrentCamera
+    OriginalFOV = camera.FieldOfView
+    camera.FieldOfView = FOVSettings.FOV
+    print("✅ FOV Changer enabled! FOV:", FOVSettings.FOV)
+end
+
+function FOVChanger:Disable()
+    FOVSettings.Enabled = false
+    local camera = workspace.CurrentCamera
+    if OriginalFOV then
+        camera.FieldOfView = OriginalFOV
+        OriginalFOV = nil
+    end
+    print("❌ FOV Changer disabled!")
+end
+
+function FOVChanger:SetFOV(value)
+    FOVSettings.FOV = value
+    if FOVSettings.Enabled then
+        workspace.CurrentCamera.FieldOfView = value
+    end
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- 8. THIRD PERSON (вид от третьего лица)
+-- ═══════════════════════════════════════════════════════════════
+local ThirdPerson = {}
+local ThirdPersonSettings = {
+    Enabled = false,
+    Distance = 10,
+}
+
+function ThirdPerson:Enable()
+    ThirdPersonSettings.Enabled = true
+    local camera = workspace.CurrentCamera
+    camera.CameraType = Enum.CameraType.Scriptable
+    print("✅ Third Person enabled!")
+end
+
+function ThirdPerson:Disable()
+    ThirdPersonSettings.Enabled = false
+    local camera = workspace.CurrentCamera
+    camera.CameraType = Enum.CameraType.Custom
+    print("❌ Third Person disabled!")
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- 9. X-RAY (прозрачные стены)
+-- ═══════════════════════════════════════════════════════════════
+local XRay = {}
+local XRaySettings = {
+    Enabled = false,
+    Transparency = 0.7,
+}
+
+local OriginalParts = {}
+local XRayThread = nil
+
+local function MakeTransparent(part)
+    if part:IsA("BasePart") and part.Transparency < 0.9 then
+        OriginalParts[part] = part.Transparency
+        part.Transparency = XRaySettings.Transparency
+    end
+end
+
+local function RestorePart(part)
+    if OriginalParts[part] then
+        part.Transparency = OriginalParts[part]
+        OriginalParts[part] = nil
+    end
+end
+
+function XRay:Enable()
+    XRaySettings.Enabled = true
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") and obj.Transparency < 0.9 and not obj.Parent:IsDescendantOf(LocalPlayer.Character or {}) then
+            MakeTransparent(obj)
+        end
+    end
+    XRay.AddedConn = workspace.DescendantAdded:Connect(function(obj)
+        if XRaySettings.Enabled and obj:IsA("BasePart") and obj.Transparency < 0.9 then
+            MakeTransparent(obj)
+        end
+    end)
+    print("✅ X-Ray enabled!")
+end
+
+function XRay:Disable()
+    XRaySettings.Enabled = false
+    if XRay.AddedConn then XRay.AddedConn:Disconnect() XRay.AddedConn = nil end
+    for part in pairs(OriginalParts) do
+        RestorePart(part)
+    end
+    print("❌ X-Ray disabled!")
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- 10. RAINBOW MODE (радужный режим)
+-- ═══════════════════════════════════════════════════════════════
+local RainbowMode = {}
+local RainbowSettings = {
+    Enabled = false,
+    Speed = 1,
+}
+
+local RainbowThread = nil
+local Hue = 0
+
+function RainbowMode:Enable()
+    RainbowSettings.Enabled = true
+    Hue = 0
+    
+    RainbowThread = RunService.Heartbeat:Connect(function(dt)
+        if not RainbowSettings.Enabled then return end
+        Hue = (Hue + dt * RainbowSettings.Speed * 0.1) % 1
+        local color = Color3.fromHSV(Hue, 1, 1)
+        
+        -- Меняем цвет фона
+        if MainFrame then
+            MainFrame.BackgroundColor3 = color
+        end
+    end)
+    
+    print("✅ Rainbow Mode enabled!")
+end
+
+function RainbowMode:Disable()
+    RainbowSettings.Enabled = false
+    if RainbowThread then
+        RainbowThread:Disconnect()
+        RainbowThread = nil
+    end
+    if MainFrame then
+        MainFrame.BackgroundColor3 = COLORS.Background
+    end
+    print("❌ Rainbow Mode disabled!")
+end
+
+function RainbowMode:SetSpeed(value)
+    RainbowSettings.Speed = value
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- ДОБАВЛЕНИЕ ВСЕХ ФУНКЦИЙ В VISUALS ВКЛАДКУ
+-- ═══════════════════════════════════════════════════════════════
+
+-- Функция для создания toggle с шестеренкой
+local function CreateVisualToggle(name, enableFunc, disableFunc, settingsFunc)
+    local ToggleFrame = Instance.new("Frame")
+    ToggleFrame.Size = UDim2.new(1, 0, 0, 32)
+    ToggleFrame.BackgroundColor3 = COLORS.Section
+    ToggleFrame.BorderSizePixel = 0
+    ToggleFrame.Parent = VisualsContent
+    
+    local ToggleCorner = Instance.new("UICorner")
+    ToggleCorner.CornerRadius = UDim.new(0, 6)
+    ToggleCorner.Parent = ToggleFrame
+    
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(1, -90, 1, 0)
+    Label.Position = UDim2.new(0, 12, 0, 0)
+    Label.BackgroundTransparency = 1
+    Label.Text = name
+    Label.TextColor3 = COLORS.Text
+    Label.TextSize = 12
+    Label.Font = Enum.Font.Gotham
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.Parent = ToggleFrame
+    
+    local ToggleButton = Instance.new("TextButton")
+    ToggleButton.Size = UDim2.new(0, 36, 0, 20)
+    ToggleButton.Position = UDim2.new(1, -80, 0.5, -10)
+    ToggleButton.BackgroundColor3 = COLORS.ToggleOff
+    ToggleButton.Text = ""
+    ToggleButton.BorderSizePixel = 0
+    ToggleButton.Parent = ToggleFrame
+    
+    local ToggleButtonCorner = Instance.new("UICorner")
+    ToggleButtonCorner.CornerRadius = UDim.new(1, 0)
+    ToggleButtonCorner.Parent = ToggleButton
+    
+    local Circle = Instance.new("Frame")
+    Circle.Size = UDim2.new(0, 16, 0, 16)
+    Circle.Position = UDim2.new(0, 2, 0.5, -8)
+    Circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Circle.BorderSizePixel = 0
+    Circle.Parent = ToggleButton
+    
+    local CircleCorner = Instance.new("UICorner")
+    CircleCorner.CornerRadius = UDim.new(1, 0)
+    CircleCorner.Parent = Circle
+    
+    local GearButton = Instance.new("TextButton")
+    GearButton.Size = UDim2.new(0, 30, 0, 30)
+    GearButton.Position = UDim2.new(1, -40, 0.5, -15)
+    GearButton.BackgroundColor3 = COLORS.Section
+    GearButton.Text = ""
+    GearButton.TextColor3 = COLORS.TextDim
+    GearButton.TextSize = 16
+    GearButton.Font = Enum.Font.GothamBold
+    GearButton.BorderSizePixel = 0
+    GearButton.Parent = ToggleFrame
+    
+    local GearCorner = Instance.new("UICorner")
+    GearCorner.CornerRadius = UDim.new(0, 6)
+    GearCorner.Parent = GearButton
+    
+    local enabled = false
+    local settingsOpen = false
+    local settingsPanel = nil
+    
+    ToggleButton.MouseButton1Click:Connect(function()
+        enabled = not enabled
+        ToggleButton.BackgroundColor3 = enabled and COLORS.ToggleOn or COLORS.ToggleOff
+        TweenService:Create(Circle, TweenInfo.new(0.2), {
+            Position = enabled and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+        }):Play()
+        
+        if enabled then
+            enableFunc()
+        else
+            disableFunc()
+            if settingsPanel then
+                settingsPanel:Destroy()
+                settingsPanel = nil
+                settingsOpen = false
+            end
+        end
+    end)
+    
+    GearButton.MouseButton1Click:Connect(function()
+        if not enabled then return end
+        settingsOpen = not settingsOpen
+        if settingsFunc then settingsFunc(settingsOpen) end
+    end)
+    
+    ToggleFrame.MouseEnter:Connect(function() ToggleFrame.BackgroundColor3 = COLORS.Hover end)
+    ToggleFrame.MouseLeave:Connect(function() ToggleFrame.BackgroundColor3 = COLORS.Section end)
+    GearButton.MouseEnter:Connect(function() GearButton.BackgroundColor3 = COLORS.Hover end)
+    GearButton.MouseLeave:Connect(function() GearButton.BackgroundColor3 = COLORS.Section end)
+end
+
+-- Добавляем все визуальные функции
+CreateVisualToggle("Gun ESP", function() GunESP:Enable() end, function() GunESP:Disable() end)
+CreateVisualToggle("Fullbright", function() Fullbright:Enable() end, function() Fullbright:Disable() end)
+CreateVisualToggle("No Fog", function() NoFog:Enable() end, function() NoFog:Disable() end)
+CreateVisualToggle("Player Glow", function() PlayerGlow:Enable() end, function() PlayerGlow:Disable() end)
+CreateVisualToggle("Tracers", function() Tracers:Enable() end, function() Tracers:Disable() end)
+CreateVisualToggle("Custom Crosshair", function() CustomCrosshair:Enable() end, function() CustomCrosshair:Disable() end)
+CreateVisualToggle("FOV Changer", function() FOVChanger:Enable() end, function() FOVChanger:Disable() end)
+CreateVisualToggle("Third Person", function() ThirdPerson:Enable() end, function() ThirdPerson:Disable() end)
+CreateVisualToggle("X-Ray", function() XRay:Enable() end, function() XRay:Disable() end)
+CreateVisualToggle("Rainbow Mode", function() RainbowMode:Enable() end, function() RainbowMode:Disable() end)
+
+print("✅ All visuals loaded!")
